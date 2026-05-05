@@ -7,6 +7,8 @@ import {
   Routes,
   useNavigate,
 } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { MatrixClientPeg } from "./client/peg";
 import { AuthCallback } from "./components/auth/auth-callback";
 import { Login } from "./components/auth/login";
@@ -37,15 +39,21 @@ export function App({
 
   if (initialRoute) {
     return (
-      <MemoryRouter initialEntries={[initialRoute]}>
-        <AppRoutes config={config} />
-      </MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter initialEntries={[initialRoute]}>
+          <AppRoutes config={config} />
+        </MemoryRouter>
+        <Toaster />
+      </TooltipProvider>
     );
   }
   return (
-    <BrowserRouter>
-      <AppRoutes config={config} />
-    </BrowserRouter>
+    <TooltipProvider>
+      <BrowserRouter>
+        <AppRoutes config={config} />
+      </BrowserRouter>
+      <Toaster />
+    </TooltipProvider>
   );
 }
 

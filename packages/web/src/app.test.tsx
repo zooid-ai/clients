@@ -61,7 +61,8 @@ describe("<App />", () => {
     const user = (await import("@testing-library/user-event")).default.setup();
     render(<App config={{ homeserverUrl: HS }} />);
     await waitFor(() => screen.getByTestId("logged-in-view"));
-    await user.click(screen.getByRole("button", { name: /log out/i }));
+    await user.click(screen.getByRole("button", { name: /user menu/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /log out/i }));
     await waitFor(() => expect(screen.queryByTestId("logged-in-view")).toBeNull());
     expect(localStorage.getItem("zoon:session")).toBeNull();
   });

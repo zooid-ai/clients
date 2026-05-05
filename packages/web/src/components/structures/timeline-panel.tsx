@@ -1,12 +1,12 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTimeline } from "../../hooks/use-timeline";
 import { MessagePanel } from "./message-panel";
-import { ScrollPanel } from "./scroll-panel";
 
 export function TimelinePanel({ roomId }: { roomId: string }) {
   const { events } = useTimeline(roomId);
   return (
-    <ScrollPanel>
+    <ScrollArea className="h-full">
       <MessagePanel events={events} />
-    </ScrollPanel>
+    </ScrollArea>
   );
 }

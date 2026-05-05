@@ -33,7 +33,7 @@ test("approval Allow click round-trips to a Matrix response event", async ({
   // 5. Wait for the post-login shell, then navigate directly to the room URL.
   //    matrix-js-sdk computes room.name from members for nameless rooms, so
   //    we can't reliably click "the link with the roomId text" — go by URL.
-  await page.getByRole("button", { name: /log out/i }).waitFor();
+  await page.getByRole("button", { name: /user menu/i }).waitFor();
   await page.goto(`/room/${roomId}`);
 
   // 6. Approval card visible; click Allow.

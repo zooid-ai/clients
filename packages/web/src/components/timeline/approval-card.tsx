@@ -1,4 +1,13 @@
 import type { MatrixEvent } from "matrix-js-sdk";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ApprovalEventType, decodeApprovalRequest } from "../../events/approval";
 import { useApproval } from "../../hooks/use-approval";
 import { useMyPowerLevel } from "../../hooks/use-my-power-level";
@@ -14,45 +23,58 @@ export function ApprovalCard({ event }: { event: MatrixEvent }) {
 
   if (state === "resolved" && resolution) {
     return (
-      <div className="approval-card approval-card--resolved" data-testid="approval-card">
-        <div className="approval-card__title">Approval request</div>
-        <div className="approval-card__resolution">
-          {resolution.decision === "allow" ? "Approved" : "Cancelled"} by{" "}
-          <span>{resolution.respondedBy}</span>
-        </div>
-      </div>
+      <Card data-testid="approval-card" className="my-2 max-w-xl">
+        <CardHeader>
+          <CardTitle>Approval request</CardTitle>
+          <CardDescription>
+            {resolution.decision === "allow" ? "Approved" : "Cancelled"} by{" "}
+            <span>{resolution.respondedBy}</span>
+          </CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
 
   return (
-    <div className="approval-card" data-testid="approval-card">
-      <div className="approval-card__title">Approval request</div>
-      <div className="approval-card__meta">
-        session {decoded.sessionId} · tool-call {decoded.toolCallId}
-      </div>
-      {error && <div role="alert">{error}</div>}
+    <Card data-testid="approval-card" className="my-2 max-w-xl">
+      <CardHeader>
+        <CardTitle>Approval request</CardTitle>
+        <CardDescription>
+          session {decoded.sessionId} · tool-call {decoded.toolCallId}
+        </CardDescription>
+      </CardHeader>
+      {error && (
+        <CardContent>
+          <div role="alert" className="text-destructive text-sm">
+            {error}
+          </div>
+        </CardContent>
+      )}
       {!canApprove ? (
-        <div className="approval-card__noperm">
-          You have insufficient permission to respond to this approval.
-        </div>
+        <CardContent>
+          <p className="text-muted-foreground text-sm">
+            You have insufficient permission to respond to this approval.
+          </p>
+        </CardContent>
       ) : (
-        <div className="approval-card__actions">
-          <button
+        <CardFooter className="gap-2">
+          <Button
             type="button"
             disabled={state === "sending"}
             onClick={() => send("allow")}
           >
             Allow
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
             disabled={state === "sending"}
             onClick={() => send("cancel")}
           >
             Cancel
-          </button>
-        </div>
+          </Button>
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 }

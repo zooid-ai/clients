@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 
 export function Composer({ roomId }: { roomId: string }) {
@@ -25,14 +26,20 @@ export function Composer({ roomId }: { roomId: string }) {
   };
 
   return (
-    <div className="composer">
-      {error && <div role="alert">{error}</div>}
-      <textarea
+    <div className="flex flex-col gap-2 border-t border-border p-3">
+      {error && (
+        <div role="alert" className="text-destructive text-sm">
+          {error}
+        </div>
+      )}
+      <Textarea
         aria-label="Message"
+        placeholder="Send a message…"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}
         rows={3}
+        className="resize-none"
       />
     </div>
   );

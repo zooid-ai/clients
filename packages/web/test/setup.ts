@@ -3,6 +3,36 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
+// jsdom does not implement matchMedia; sonner's <Toaster /> and the
+// ThemeProvider read it on mount.
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+// jsdom does not implement ResizeObserver; radix ScrollArea constructs one.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  class ResizeObserverPolyfill {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  (globalThis as unknown as { ResizeObserver: typeof ResizeObserverPolyfill }).ResizeObserver =
+    ResizeObserverPolyfill;
+}
+
 export const mswServer = setupServer();
 
 // Default to "error" for strict tests (catches typos in handler URLs). Tests
