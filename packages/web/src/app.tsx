@@ -1,0 +1,63 @@
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { MatrixClientPeg } from "./client/peg";
+import { AuthCallback } from "./components/auth/auth-callback";
+import { Login } from "./components/auth/login";
+import { LoggedInView } from "./components/structures/logged-in-view";
+import { useAuthState } from "./hooks/use-auth-state";
+
+export interface AppConfig {
+  homeserverUrl: string;
+  defaultIdpLabel?: string | null;
+}
+
+export function App({ config }: { config: AppConfig }) {
+  const [restored, setRestored] = useState(false);
+
+  useEffect(() => {
+    MatrixClientPeg.restoreFromStorage();
+    setRestored(true);
+  }, []);
+
+  if (!restored) return <div role="status">Loading…</div>;
+
+  return (
+    <BrowserRouter>
+      <AppRoutes config={config} />
+    </BrowserRouter>
+  );
+}
+
+function AppRoutes({ config }: { config: AppConfig }) {
+  const auth = useAuthState();
+  const navigate = useNavigate();
+
+  // Auth state changes outside the router (e.g. logout button) need to drive
+  // routing back to /login. The router itself is stateless on this signal so
+  // we synchronise here.
+  useEffect(() => {
+    if (auth === "logged-out" && window.location.pathname !== "/auth/callback") {
+      navigate("/login", { replace: true });
+    }
+  }, [auth, navigate]);
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={auth === "logged-in" ? <LoggedInView /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/login"
+        element={
+          auth === "logged-in" ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Login homeserverUrl={config.homeserverUrl} defaultIdpLabel={config.defaultIdpLabel ?? null} />
+          )
+        }
+      />
+      <Route path="/auth/callback" element={<AuthCallback homeserverUrl={config.homeserverUrl} />} />
+    </Routes>
+  );
+}
