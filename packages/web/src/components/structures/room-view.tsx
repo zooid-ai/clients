@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { Composer } from "../rooms/composer";
 import { TimelinePanel } from "./timeline-panel";
 
 export function RoomView() {
@@ -7,6 +8,7 @@ export function RoomView() {
   return (
     <article className="room-view">
       <TimelinePanel roomId={roomId} />
+      <Composer roomId={roomId} />
     </article>
   );
 }

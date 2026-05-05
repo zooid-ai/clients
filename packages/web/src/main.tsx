@@ -17,6 +17,11 @@ async function bootstrap() {
     homeserverUrl,
     defaultIdpLabel: runtime?.default_idp_label ?? null,
   };
+  if (import.meta.env.DEV) {
+    // Affordance for Playwright e2e (and ZNC002 features) to call SDK methods
+    // directly inside the browser context. Dev-only — production builds drop this.
+    (globalThis as unknown as { matrixcs: unknown }).matrixcs = await import("matrix-js-sdk");
+  }
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App config={config} />

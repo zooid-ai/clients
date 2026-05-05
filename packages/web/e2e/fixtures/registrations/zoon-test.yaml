@@ -1,0 +1,12 @@
+id: zoon-test
+url: http://host.docker.internal:9099
+as_token: as-zoon-test-fixed-token-do-not-use-in-prod
+hs_token: hs-zoon-test-fixed-token-do-not-use-in-prod
+sender_localpart: zoon_test_bridge
+rate_limited: false
+namespaces:
+  users:
+    - exclusive: true
+      regex: '@_zoon_test_.*:localhost'
+  aliases: []
+  rooms: []
