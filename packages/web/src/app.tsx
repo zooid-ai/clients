@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  MemoryRouter,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
 import { MatrixClientPeg } from "./client/peg";
 import { AuthCallback } from "./components/auth/auth-callback";
 import { Login } from "./components/auth/login";
 import { LoggedInView } from "./components/structures/logged-in-view";
+import { RoomView } from "./components/structures/room-view";
 import { useAuthState } from "./hooks/use-auth-state";
 
 export interface AppConfig {
@@ -11,7 +19,13 @@ export interface AppConfig {
   defaultIdpLabel?: string | null;
 }
 
-export function App({ config }: { config: AppConfig }) {
+export function App({
+  config,
+  initialRoute,
+}: {
+  config: AppConfig;
+  initialRoute?: string;
+}) {
   const [restored, setRestored] = useState(false);
 
   useEffect(() => {
@@ -21,6 +35,13 @@ export function App({ config }: { config: AppConfig }) {
 
   if (!restored) return <div role="status">Loading…</div>;
 
+  if (initialRoute) {
+    return (
+      <MemoryRouter initialEntries={[initialRoute]}>
+        <AppRoutes config={config} />
+      </MemoryRouter>
+    );
+  }
   return (
     <BrowserRouter>
       <AppRoutes config={config} />
@@ -46,14 +67,20 @@ function AppRoutes({ config }: { config: AppConfig }) {
       <Route
         path="/"
         element={auth === "logged-in" ? <LoggedInView /> : <Navigate to="/login" replace />}
-      />
+      >
+        <Route index element={<div className="empty-room">Select a room</div>} />
+        <Route path="room/:roomId" element={<RoomView />} />
+      </Route>
       <Route
         path="/login"
         element={
           auth === "logged-in" ? (
             <Navigate to="/" replace />
           ) : (
-            <Login homeserverUrl={config.homeserverUrl} defaultIdpLabel={config.defaultIdpLabel ?? null} />
+            <Login
+              homeserverUrl={config.homeserverUrl}
+              defaultIdpLabel={config.defaultIdpLabel ?? null}
+            />
           )
         }
       />

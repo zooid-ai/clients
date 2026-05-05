@@ -48,6 +48,19 @@ class MatrixClientPegImpl {
     this.emit();
   }
 
+  /** TEST ONLY. Inject a pre-built client without going through createClient(). */
+  injectClientForTest(client: MatrixClient): void {
+    if (this.client) {
+      try {
+        this.client.stopClient();
+      } catch {
+        // tolerated
+      }
+    }
+    this.client = client;
+    this.emit();
+  }
+
   restoreFromStorage(): Credentials | null {
     const creds = sessionStorage_.getJSON<Credentials>("session");
     if (!creds) return null;

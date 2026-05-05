@@ -1,18 +1,17 @@
 import { useEffect } from "react";
-import { useMatrixClient } from "../../hooks/use-matrix-client";
+import { Outlet } from "react-router-dom";
 import { MatrixClientPeg } from "../../client/peg";
+import { useMatrixClient } from "../../hooks/use-matrix-client";
+import { LeftPanel } from "./left-panel";
+import { MainSplit } from "./main-split";
 
 export function LoggedInView() {
   const client = useMatrixClient();
 
   useEffect(() => {
-    // Spec: minimal startClient. Sync, room list, and timeline are PLAN-02.
     client.startClient({ initialSyncLimit: 10 }).catch(() => {
-      // Sync failures are surfaced in PLAN-02; for now we just keep the shell up.
+      // sync errors are out of scope for this cycle; surface in future epic
     });
-    return () => {
-      // We don't stop on unmount — the peg owns lifecycle. Logout calls reset().
-    };
   }, [client]);
 
   return (
@@ -23,7 +22,7 @@ export function LoggedInView() {
           Log out
         </button>
       </header>
-      <main>{/* PLAN-02 fills LeftPanel + RoomView here */}</main>
+      <MainSplit left={<LeftPanel />} main={<Outlet />} />
     </div>
   );
 }

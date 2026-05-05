@@ -1,0 +1,63 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { App } from "../../app";
+import { MatrixClientPeg } from "../../client/peg";
+import { relaxUnhandled, stubStartClient, stubSyncWithRooms } from "../../../test/setup";
+
+const HS = "https://h.example";
+const me = "@me:h.example";
+
+describe("<LeftPanel />", () => {
+  beforeEach(() => {
+    localStorage.setItem(
+      "zoon:session",
+      JSON.stringify({ homeserverUrl: HS, accessToken: "tok", userId: me, deviceId: "DEV1" }),
+    );
+    relaxUnhandled();
+    stubStartClient(HS);
+  });
+  afterEach(() => {
+    MatrixClientPeg.reset();
+    localStorage.clear();
+  });
+
+  it("lists rooms returned by /sync", async () => {
+    stubSyncWithRooms(HS, [
+      {
+        roomId: "!a:h.example",
+        myUserId: me,
+        state: [{ type: "m.room.name", sender: me, stateKey: "", content: { name: "alpha" } }],
+      },
+      {
+        roomId: "!b:h.example",
+        myUserId: me,
+        state: [{ type: "m.room.name", sender: me, stateKey: "", content: { name: "beta" } }],
+      },
+    ]);
+    render(<App config={{ homeserverUrl: HS }} />);
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+    expect(screen.getByText("beta")).toBeInTheDocument();
+  });
+
+  it("clicking a room navigates to /room/:roomId and renders the timeline", async () => {
+    stubSyncWithRooms(HS, [
+      {
+        roomId: "!a:h.example",
+        myUserId: me,
+        state: [{ type: "m.room.name", sender: me, stateKey: "", content: { name: "alpha" } }],
+        timeline: [
+          {
+            type: "m.room.message",
+            sender: "@architect.acme:h.example",
+            content: { msgtype: "m.text", body: "hi from architect" },
+          },
+        ],
+      },
+    ]);
+    render(<App config={{ homeserverUrl: HS }} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByText("alpha"));
+    expect(await screen.findByText("hi from architect")).toBeInTheDocument();
+  });
+});

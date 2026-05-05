@@ -32,8 +32,68 @@ export function stubStartClient(homeserverUrl: string) {
     http.get(`${homeserverUrl}/_matrix/client/v3/pushrules/`, () =>
       HttpResponse.json({ global: { override: [], content: [], room: [], sender: [], underride: [] } }),
     ),
-    http.get(`${homeserverUrl}/_matrix/client/v3/sync`, () =>
-      HttpResponse.json({ next_batch: "s1", rooms: { join: {}, invite: {}, leave: {} } }),
+    http.post(`${homeserverUrl}/_matrix/client/v3/user/:userId/filter`, () =>
+      HttpResponse.json({ filter_id: "f1" }),
     ),
+    http.get(`${homeserverUrl}/_matrix/client/v3/sync`, ({ request }) => {
+      const url = new URL(request.url);
+      // First sync request has no `since` token; subsequent long-polls do.
+      // Hold long-polls open indefinitely in tests so we don't churn the
+      // event loop forever — they are aborted by stopClient() in afterEach.
+      if (url.searchParams.get("since")) return new Promise(() => {});
+      return HttpResponse.json({ next_batch: "s1", rooms: { join: {}, invite: {}, leave: {} } });
+    }),
+  );
+}
+
+export interface StubRoom {
+  roomId: string;
+  name?: string;
+  myUserId: string;
+  timeline?: Array<{
+    type: string;
+    sender: string;
+    content: Record<string, unknown>;
+    eventId?: string;
+  }>;
+  state?: Array<{
+    type: string;
+    sender: string;
+    stateKey: string;
+    content: Record<string, unknown>;
+  }>;
+}
+
+export function stubSyncWithRooms(homeserverUrl: string, rooms: StubRoom[]): void {
+  const join: Record<string, unknown> = {};
+  for (const r of rooms) {
+    const stateEvents = (r.state ?? []).map((s, i) => ({
+      type: s.type,
+      sender: s.sender,
+      state_key: s.stateKey,
+      content: s.content,
+      event_id: `$state${i}_${r.roomId}`,
+      origin_server_ts: 1,
+    }));
+    const timelineEvents = (r.timeline ?? []).map((t, i) => ({
+      type: t.type,
+      sender: t.sender,
+      content: t.content,
+      event_id: t.eventId ?? `$tl${i}_${r.roomId}`,
+      origin_server_ts: 1000 + i,
+    }));
+    join[r.roomId] = {
+      state: { events: stateEvents },
+      timeline: { events: timelineEvents, prev_batch: "p1", limited: false },
+      ephemeral: { events: [] },
+      account_data: { events: [] },
+    };
+  }
+  mswServer.use(
+    http.get(`${homeserverUrl}/_matrix/client/v3/sync`, ({ request }) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get("since")) return new Promise(() => {});
+      return HttpResponse.json({ next_batch: "s1", rooms: { join, invite: {}, leave: {} } });
+    }),
   );
 }
