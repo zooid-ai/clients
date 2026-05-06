@@ -1,4 +1,5 @@
 import { UserEvent } from "matrix-js-sdk";
+import type { MatrixEvent, User } from "matrix-js-sdk";
 import { useEffect, useState } from "react";
 import { MatrixClientPeg } from "../client/peg";
 
@@ -24,12 +25,26 @@ export function usePresence(userId: string): PresenceState {
   useEffect(() => {
     const client = MatrixClientPeg.safeGet();
     if (!client) return;
-    const user = client.getUser(userId);
-    if (!user) return;
 
     const update = () => setState(readPresence(userId));
-    user.on(UserEvent.Presence, update);
-    return () => { user.off(UserEvent.Presence, update); };
+
+    // Subscribe directly on the User object if it already exists.
+    const user = client.getUser(userId);
+    if (user) {
+      user.on(UserEvent.Presence, update);
+    }
+
+    // Also listen at the client level: the SDK re-emits UserEvent.Presence for
+    // all users (including ones whose User object didn't exist on mount).
+    const clientUpdate = (_event: MatrixEvent | null, presenceUser: User) => {
+      if (presenceUser.userId === userId) update();
+    };
+    client.on(UserEvent.Presence, clientUpdate);
+
+    return () => {
+      user?.off(UserEvent.Presence, update);
+      client.off(UserEvent.Presence, clientUpdate);
+    };
   }, [userId]);
 
   return state;

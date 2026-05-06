@@ -10,7 +10,7 @@ function AvatarWithPresence({ userId }: { userId: string }) {
 
 export function TextMessage({ event }: { event: MatrixEvent }) {
   const c = event.getContent() as { msgtype?: string; body?: string };
-  if (c.msgtype !== "m.text") return null;
+  if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
   const sender = event.getSender() ?? "?";
   const body = c.body ?? "";
   return (

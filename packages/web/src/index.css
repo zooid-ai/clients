@@ -70,7 +70,7 @@
     --border: hsl(0 0% 88%);
     --input: hsl(0 0% 88%);
     --ring: hsl(188 95% 38%);
-    --radius: 0rem;
+    --radius: 0.2rem;
     --sidebar: hsl(0 0% 96%);
     --sidebar-foreground: hsl(0 0% 9%);
     --sidebar-primary: hsl(188 95% 38%);
@@ -102,7 +102,7 @@
     --border: hsl(0 0% 20%);
     --input: hsl(0 0% 20%);
     --ring: hsl(188 95% 53%);
-    --radius: 0rem;
+    --radius: 0.2rem;
     --sidebar: hsl(0 0% 7%);
     --sidebar-foreground: hsl(0 0% 90%);
     --sidebar-primary: hsl(188 95% 53%);

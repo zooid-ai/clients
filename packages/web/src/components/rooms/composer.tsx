@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
+import { SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { displayNameOf, senderColor } from "@/lib/sender";
 import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
@@ -6,7 +7,10 @@ import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
 
 const TEXTAREA_CLS =
-  "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40";
+  "field-sizing-content min-h-9 flex-1 bg-transparent px-2.5 py-2 text-base outline-none placeholder:text-muted-foreground resize-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
+
+const INPUT_WRAPPER_CLS =
+  "flex items-center rounded-lg border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30 pr-1.5";
 
 interface Member {
   userId: string;
@@ -207,7 +211,7 @@ export function Composer({ roomId }: { roomId: string }) {
   };
 
   return (
-    <div className="relative shrink-0 border-t border-border p-3 pt-0">
+    <div className="relative shrink-0 border-t border-border p-3">
       {error && (
         <div role="alert" className="mb-2 text-sm text-destructive">
           {error}
@@ -262,35 +266,46 @@ export function Composer({ roomId }: { roomId: string }) {
               ))}
         </ul>
       )}
-      <textarea
-        ref={textareaRef}
-        data-slot="textarea"
-        aria-label="Message"
-        placeholder="Send a message…"
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          detectAutocomplete(e.target.value, e.target.selectionStart);
-        }}
-        onKeyUp={(e) => {
-          // Don't re-run autocomplete on arrow keys when the list is open —
-          // onKeyDown already handled navigation; running detectAutocomplete
-          // here would reset activeIdx to 0.
-          if (ac && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
-          if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") {
+      <div className={INPUT_WRAPPER_CLS}>
+        <textarea
+          ref={textareaRef}
+          data-slot="textarea"
+          aria-label="Message"
+          placeholder="Send a message…"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            detectAutocomplete(e.target.value, e.target.selectionStart);
+          }}
+          onKeyUp={(e) => {
+            // Don't re-run autocomplete on arrow keys when the list is open —
+            // onKeyDown already handled navigation; running detectAutocomplete
+            // here would reset activeIdx to 0.
+            if (ac && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
+            if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") {
+              const ta = e.currentTarget;
+              detectAutocomplete(ta.value, ta.selectionStart);
+            }
+          }}
+          onClick={(e) => {
             const ta = e.currentTarget;
             detectAutocomplete(ta.value, ta.selectionStart);
-          }
-        }}
-        onClick={(e) => {
-          const ta = e.currentTarget;
-          detectAutocomplete(ta.value, ta.selectionStart);
-        }}
-        onBlur={() => setAc(null)}
-        onKeyDown={onKeyDown}
-        rows={3}
-        className={cn(TEXTAREA_CLS, "resize-none")}
-      />
+          }}
+          onBlur={() => setAc(null)}
+          onKeyDown={onKeyDown}
+          rows={1}
+          className={cn(TEXTAREA_CLS)}
+        />
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={!value.trim()}
+          aria-label="Send message"
+          className="shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+        >
+          <SendHorizontal className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
