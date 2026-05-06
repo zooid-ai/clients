@@ -12,7 +12,36 @@ const room = "!r:h.example";
 const sender = "@architect.acme:h.example";
 
 describe("decodeApprovalRequest", () => {
-  it("decodes a well-formed request", () => {
+  it("decodes a well-formed request (zooid {optionId,name,kind} options)", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: ApprovalEventType.Request,
+      content: {
+        approval_id: "a1",
+        session_id: "s1",
+        tool_call_id: "tc1",
+        options: [
+          { optionId: "once", name: "Allow once", kind: "allow_once" },
+          { optionId: "reject", name: "Reject", kind: "reject_once" },
+        ],
+      },
+    });
+    expect(decodeApprovalRequest(ev)).toEqual<ApprovalRequest>({
+      approvalId: "a1",
+      sessionId: "s1",
+      toolCallId: "tc1",
+      toolKind: undefined,
+      toolTitle: undefined,
+      toolInput: undefined,
+      options: [
+        { optionId: "once", name: "Allow once", kind: "allow_once" },
+        { optionId: "reject", name: "Reject", kind: "reject_once" },
+      ],
+    });
+  });
+
+  it("decodes legacy {id,label} options for back-compat", () => {
     const ev = mkMatrixEvent({
       roomId: room,
       sender,
@@ -27,15 +56,10 @@ describe("decodeApprovalRequest", () => {
         ],
       },
     });
-    expect(decodeApprovalRequest(ev)).toEqual<ApprovalRequest>({
-      approvalId: "a1",
-      sessionId: "s1",
-      toolCallId: "tc1",
-      options: [
-        { id: "allow", label: "Allow" },
-        { id: "cancel", label: "Cancel" },
-      ],
-    });
+    expect(decodeApprovalRequest(ev)?.options).toEqual([
+      { optionId: "allow", name: "Allow", kind: "" },
+      { optionId: "cancel", name: "Cancel", kind: "" },
+    ]);
   });
 
   it("returns null for malformed requests (missing approval_id)", () => {

@@ -7,11 +7,20 @@ export const ApprovalEventType = {
 
 export type ApprovalDecision = "allow" | "cancel";
 
+export interface ApprovalOption {
+  optionId: string;
+  name: string;
+  kind: string;
+}
+
 export interface ApprovalRequest {
   approvalId: string;
   sessionId: string;
   toolCallId: string;
-  options: Array<{ id: string; label: string }>;
+  toolKind?: string;
+  toolTitle?: string;
+  toolInput?: unknown;
+  options: ApprovalOption[];
 }
 
 export interface ApprovalResponse {
@@ -32,14 +41,22 @@ export function decodeApprovalRequest(ev: MatrixEvent): ApprovalRequest | null {
     .map((o) => {
       if (!o || typeof o !== "object") return null;
       const r = o as Record<string, unknown>;
-      if (typeof r.id !== "string" || typeof r.label !== "string") return null;
-      return { id: r.id, label: r.label };
+      // Matrix event from zooid uses { optionId, name, kind }. Older code
+      // also produced { id, label } — accept either for compatibility.
+      const optionId = typeof r.optionId === "string" ? r.optionId : typeof r.id === "string" ? r.id : null;
+      const name = typeof r.name === "string" ? r.name : typeof r.label === "string" ? r.label : null;
+      const kind = typeof r.kind === "string" ? r.kind : "";
+      if (!optionId || !name) return null;
+      return { optionId, name, kind } satisfies ApprovalOption;
     })
-    .filter((o): o is { id: string; label: string } => o !== null);
+    .filter((o): o is ApprovalOption => o !== null);
   return {
     approvalId: c.approval_id,
     sessionId: c.session_id,
     toolCallId: c.tool_call_id,
+    toolKind: typeof c.tool_kind === "string" ? c.tool_kind : undefined,
+    toolTitle: typeof c.tool_title === "string" ? c.tool_title : undefined,
+    toolInput: c.tool_input,
     options,
   };
 }

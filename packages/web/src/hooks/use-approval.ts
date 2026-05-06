@@ -42,6 +42,7 @@ export function useApproval(requestEvent: MatrixEvent): UseApproval {
         const client = MatrixClientPeg.get();
         const content: Record<string, unknown> = {
           approval_id: decoded.approvalId,
+          session_id: decoded.sessionId,
           decision,
         };
         if (optionId) content.option_id = optionId;

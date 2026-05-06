@@ -34,7 +34,7 @@ export function LoggedInView() {
   }, [client]);
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-svh overflow-hidden">
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <span className="px-2 text-xs uppercase tracking-wider text-sidebar-foreground/70">

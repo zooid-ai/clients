@@ -62,7 +62,7 @@ describe("useApproval — send", () => {
     expect(sendEvent).toHaveBeenCalledWith(
       roomId,
       ApprovalEventType.Response,
-      { approval_id: "a1", decision: "allow" },
+      { approval_id: "a1", session_id: "s1", decision: "allow" },
     );
   });
 

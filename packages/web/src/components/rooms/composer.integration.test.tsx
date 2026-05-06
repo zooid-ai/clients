@@ -34,7 +34,17 @@ describe("composer integration", () => {
       {
         roomId,
         myUserId: me,
-        state: [{ type: "m.room.name", sender: me, stateKey: "", content: { name: "alpha" } }],
+        state: [
+          { type: "m.room.name", sender: me, stateKey: "", content: { name: "alpha" } },
+          // matrix-js-sdk's sendEvent path checks the user's membership; without
+          // an explicit join state event the SDK silently drops the send.
+          {
+            type: "m.room.member",
+            sender: me,
+            stateKey: me,
+            content: { membership: "join" },
+          },
+        ],
       },
     ]);
     const sendCalls: unknown[] = [];
@@ -49,6 +59,9 @@ describe("composer integration", () => {
     );
     render(<App config={{ homeserverUrl: HS }} initialRoute={`/room/${roomId}`} />);
     const user = userEvent.setup();
+    // Wait for the initial sync to surface the room before typing — sendEvent
+    // silently queues until the client knows the room.
+    await screen.findByText("alpha");
     const input = await screen.findByRole("textbox", { name: /message/i });
     await user.type(input, "hi from me{Enter}");
     await waitFor(() => expect(sendCalls).toHaveLength(1));

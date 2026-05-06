@@ -63,6 +63,6 @@ describe("approval card integration", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /allow/i }));
     await waitFor(() => expect(sendCalls).toHaveLength(1));
-    expect(sendCalls[0]).toEqual({ approval_id: "a1", decision: "allow" });
+    expect(sendCalls[0]).toEqual({ approval_id: "a1", session_id: "s1", decision: "allow" });
   });
 });
