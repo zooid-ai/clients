@@ -24,6 +24,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { MatrixClientPeg } from "../../client/peg";
+import { useActiveSpaceId } from "../../hooks/use-active-space-id";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
 import { usePresence } from "../../hooks/use-presence";
@@ -85,6 +86,9 @@ export function LoggedInView() {
   const client = useMatrixClient();
   const userId = client.getUserId() ?? "";
   const serverName = userId.split(":")[1] ?? userId;
+  const spaceLocalpart =
+    (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
+  const { spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
 
   useEffect(() => {
     client.startClient({ initialSyncLimit: 10 }).catch(() => {});
@@ -97,7 +101,7 @@ export function LoggedInView() {
           <span className="text-sm font-medium truncate">{serverName}</span>
         </SidebarHeader>
         <SidebarContent>
-          <LeftPanel />
+          <LeftPanel spaceId={spaceId} />
         </SidebarContent>
       </Sidebar>
       <SidebarInset data-testid="logged-in-view">
