@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWorkforceRoster, makeAgentSet } from "./agent-detection";
+import { filterHumans, makeAgentSet, parseWorkforceRoster } from "./agent-detection";
 
 describe("parseWorkforceRoster", () => {
   it("returns agents from a valid v1 event content", () => {
@@ -41,5 +41,22 @@ describe("makeAgentSet", () => {
     expect(set.has("@a:h")).toBe(true);
     expect(set.has("@b:h")).toBe(true);
     expect(set.has("@c:h")).toBe(false);
+  });
+});
+
+describe("filterHumans", () => {
+  it("removes agent MXIDs from a list of candidates", () => {
+    const set = makeAgentSet([
+      { userId: "@planner:h", name: "planner", role: undefined, avatarUrl: undefined, rooms: [] },
+    ]);
+    const candidates = ["@planner:h", "@alice:h", "@bob:h"];
+    expect(filterHumans(candidates, (id) => set.has(id))).toEqual(["@alice:h", "@bob:h"]);
+  });
+
+  it("returns the input unchanged when ready=false (fail-open)", () => {
+    expect(filterHumans(["@planner:h", "@alice:h"], () => false)).toEqual([
+      "@planner:h",
+      "@alice:h",
+    ]);
   });
 });

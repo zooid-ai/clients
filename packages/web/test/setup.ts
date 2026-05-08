@@ -33,6 +33,15 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     ResizeObserverPolyfill;
 }
 
+// jsdom does not implement scrollIntoView; cmdk's <Command> calls it on
+// each mount of CommandItem to keep the active item visible.
+if (
+  typeof globalThis.Element !== "undefined" &&
+  typeof Element.prototype.scrollIntoView !== "function"
+) {
+  Element.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
 export const mswServer = setupServer();
 
 // Default to "error" for strict tests (catches typos in handler URLs). Tests

@@ -115,4 +115,34 @@ export function makeMatrixEvent(opts: MakeMatrixEventOpts): MatrixEvent {
   return event;
 }
 
+export interface SeedAgent {
+  userId: string;
+  name?: string;
+  rooms?: string[];
+}
+
+export function seedWorkforceRoster(
+  space: Room,
+  agents: SeedAgent[],
+  opts: { sender?: string } = {},
+): void {
+  injectStateEvent(
+    space,
+    mkMatrixEvent({
+      roomId: space.roomId,
+      sender: opts.sender ?? "@zooid:h.example",
+      type: "eco.zoon.workforce",
+      stateKey: "",
+      content: {
+        version: 1,
+        agents: agents.map((a) => ({
+          user_id: a.userId,
+          name: a.name ?? a.userId.slice(1).split(":")[0],
+          rooms: a.rooms ?? [],
+        })),
+      },
+    }),
+  );
+}
+
 export { mkMatrixEvent, EventType, RoomEvent, RoomStateEvent };

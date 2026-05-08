@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { injectStateEvent, makeFakeClient, makeRoom, mkMatrixEvent } from "../../../../test/factories";
@@ -10,9 +11,32 @@ const spaceId = "!space:h.example";
 
 afterEach(() => MatrixClientPeg.reset());
 
-function seed() {
+function seed(opts: { myPL?: number } = {}) {
   const client = makeFakeClient({ userId: me });
-  const space = makeRoom(spaceId, { client, myUserId: me });
+  const space = makeRoom(spaceId, {
+    client,
+    myUserId: me,
+    powerLevels: opts.myPL !== undefined ? { [me]: opts.myPL } : undefined,
+  });
+  // Override with explicit events_default + state_default so the PL hook
+  // computes canSendStateEvent("m.space.child") correctly.
+  if (opts.myPL !== undefined) {
+    injectStateEvent(
+      space,
+      mkMatrixEvent({
+        roomId: spaceId,
+        sender: "@admin:h.example",
+        type: "m.room.power_levels",
+        stateKey: "",
+        content: {
+          users: { [me]: opts.myPL },
+          users_default: 0,
+          events_default: 0,
+          state_default: 50,
+        },
+      }),
+    );
+  }
   const general = makeRoom("!general:h.example", { client, myUserId: me });
   (general as unknown as { name: string }).name = "general";
   const dm = makeRoom("!dm:h.example", { client, myUserId: me });
@@ -78,5 +102,49 @@ describe("<Sidebar>", () => {
 
     // !general is plain space child — appears in Rooms.
     expect(within(rooms).getByText("general")).toBeInTheDocument();
+  });
+});
+
+describe("<Sidebar> action affordances", () => {
+  it("renders the Add Channel button on the Rooms section header when PL allows", async () => {
+    seed({ myPL: 100 });
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: /add channel/i })).toBeInTheDocument();
+  });
+
+  it("hides Add Channel when the user lacks state-event PL", async () => {
+    seed({ myPL: 0 });
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("button", { name: /add channel/i })).not.toBeInTheDocument();
+  });
+
+  it("renders the Start DM button on the DMs section header", async () => {
+    seed({ myPL: 0 });
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: /start dm/i })).toBeInTheDocument();
+  });
+
+  it("opens the create-room dialog on Add Channel click", async () => {
+    seed({ myPL: 100 });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole("button", { name: /add channel/i }));
+    expect(await screen.findByRole("dialog", { name: /create channel/i })).toBeInTheDocument();
   });
 });

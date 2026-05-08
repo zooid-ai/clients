@@ -35,3 +35,10 @@ export function parseWorkforceRoster(content: unknown): RosterAgent[] | null {
 export function makeAgentSet(agents: RosterAgent[]): Set<string> {
   return new Set(agents.map((a) => a.userId));
 }
+
+export function filterHumans(
+  candidates: string[],
+  isAgent: (userId: string) => boolean,
+): string[] {
+  return candidates.filter((id) => !isAgent(id));
+}
