@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useMatch } from "react-router-dom";
 import { UserAvatar } from "@/components/user-avatar";
@@ -12,10 +13,15 @@ import { MatrixClientPeg } from "../../client/peg";
 import { useMembers } from "../../hooks/use-members";
 import { useMyPowerLevel } from "../../hooks/use-my-power-level";
 import { usePresence } from "../../hooks/use-presence";
+import { useRoomFavorite } from "../../hooks/use-room-favorite";
 import { displayNameOf } from "../../lib/sender";
 import { InviteUserDialog } from "../dialogs/invite-user";
 
-export function RoomHeader() {
+interface RoomHeaderProps {
+  spaceId: string | null;
+}
+
+export function RoomHeader({ spaceId }: RoomHeaderProps) {
   const match = useMatch("/room/:roomId");
   const roomId = match?.params.roomId;
   const client = useSyncExternalStore(
@@ -25,6 +31,7 @@ export function RoomHeader() {
   );
   const members = useMembers(roomId ?? "");
   const myPL = useMyPowerLevel(roomId ?? "");
+  const { isFavorite, toggle: toggleFavorite } = useRoomFavorite(roomId ?? "");
   const [inviteOpen, setInviteOpen] = useState(false);
 
   if (!roomId || !client) return null;
@@ -41,6 +48,17 @@ export function RoomHeader() {
     <>
       <Separator orientation="vertical" className="h-4" />
       <span className="text-sm font-medium truncate max-w-48">{roomName}</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        onClick={() => void toggleFavorite()}
+        className="size-6 text-muted-foreground hover:text-foreground"
+      >
+        <Star
+          className={`size-3.5 ${isFavorite ? "fill-current text-amber-500" : ""}`}
+        />
+      </Button>
       {members.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
@@ -53,7 +71,7 @@ export function RoomHeader() {
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-56 p-2">
-            {canInvite && (
+            {canInvite && spaceId && (
               <Button
                 variant="outline"
                 size="sm"
@@ -73,7 +91,14 @@ export function RoomHeader() {
           </PopoverContent>
         </Popover>
       )}
-      <InviteUserDialog open={inviteOpen} roomId={roomId} onOpenChange={setInviteOpen} />
+      {spaceId && (
+        <InviteUserDialog
+          open={inviteOpen}
+          roomId={roomId}
+          spaceId={spaceId}
+          onOpenChange={setInviteOpen}
+        />
+      )}
     </>
   );
 }

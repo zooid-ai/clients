@@ -20,6 +20,7 @@ import {
 import { MatrixClientPeg } from "../../client/peg";
 import { useActiveSpaceId } from "../../hooks/use-active-space-id";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
+import { useSpaceName } from "../../hooks/use-space-name";
 import { displayNameOf } from "../../lib/sender";
 import { LeftPanel } from "./left-panel";
 import { RoomHeader } from "./room-header";
@@ -31,6 +32,8 @@ export function LoggedInView() {
   const spaceLocalpart =
     (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
   const { spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
+  const spaceName = useSpaceName(spaceId);
+  const headerLabel = spaceName ?? spaceLocalpart;
 
   useEffect(() => {
     client.startClient({ initialSyncLimit: 10 }).catch(() => {});
@@ -40,7 +43,7 @@ export function LoggedInView() {
     <SidebarProvider className="h-svh overflow-hidden">
       <Sidebar collapsible="icon">
         <SidebarHeader className="h-12 flex-row items-center border-b border-sidebar-border px-4">
-          <span className="text-sm font-medium truncate">{serverName}</span>
+          <span className="text-sm font-medium truncate">{headerLabel}</span>
         </SidebarHeader>
         <SidebarContent>
           <LeftPanel spaceId={spaceId} />
@@ -50,7 +53,7 @@ export function LoggedInView() {
         <header className="flex items-center justify-between border-b border-border px-4 h-12">
           <div className="flex items-center gap-2 min-w-0">
             <SidebarTrigger aria-label="Toggle sidebar" />
-            <RoomHeader />
+            <RoomHeader spaceId={spaceId} />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

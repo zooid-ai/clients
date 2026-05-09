@@ -1,19 +1,15 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface SectionProps {
   title: string;
-  id: string;
   action?: ReactNode;
   children: ReactNode;
+  defaultExpanded?: boolean;
 }
 
-export function Section({ title, id, action, children }: SectionProps) {
-  const storageKey = `zoon.sidebar.section.${id}`;
-  const [expanded, setExpanded] = useState(() => localStorage.getItem(storageKey) !== "collapsed");
-  useEffect(() => {
-    localStorage.setItem(storageKey, expanded ? "expanded" : "collapsed");
-  }, [expanded, storageKey]);
+export function Section({ title, action, children, defaultExpanded = true }: SectionProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   return (
     <section role="region" aria-label={title} className="flex flex-col">

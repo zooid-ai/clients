@@ -27,14 +27,15 @@ describe("<LoggedInView /> sidebar polish", () => {
     localStorage.clear();
   });
 
-  it("renders a sidebar whose header shows the homeserver name", async () => {
+  it("renders a sidebar whose header shows the workforce-space name", async () => {
     render(<App config={{ homeserverUrl: HS }} />);
     await waitFor(() =>
       expect(screen.getByTestId("logged-in-view")).toBeInTheDocument(),
     );
     expect(document.querySelector('[data-slot="sidebar"]')).not.toBeNull();
-    // Header shows the server part of the logged-in user's Matrix ID.
-    expect(screen.getByText("h.example")).toBeInTheDocument();
+    // The minimal sync stub doesn't seed the workforce space, so the header
+    // falls back to the configured spaceLocalpart ("dev").
+    expect(screen.getByText("dev")).toBeInTheDocument();
   });
 
   it("toggles the sidebar with Cmd-B / Ctrl-B", async () => {

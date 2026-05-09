@@ -8,29 +8,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MatrixClientPeg } from "../../../client/peg";
+import { useRoomFavorite } from "../../../hooks/use-room-favorite";
 
 interface RoomRowProps {
   room: Room;
 }
 
 export function RoomRow({ room }: RoomRowProps) {
-  const isFavorite = Boolean(
-    (room as unknown as { tags?: Record<string, unknown> }).tags?.["m.favourite"],
-  );
-  const client = MatrixClientPeg.safeGet();
-  const toggleFavorite = async () => {
-    if (!client) return;
-    if (isFavorite) {
-      await (
-        client as unknown as { deleteRoomTag: (r: string, t: string) => Promise<void> }
-      ).deleteRoomTag(room.roomId, "m.favourite");
-    } else {
-      await (
-        client as unknown as { setRoomTag: (r: string, t: string, m: unknown) => Promise<void> }
-      ).setRoomTag(room.roomId, "m.favourite", { order: 0.5 });
-    }
-  };
+  const { isFavorite, toggle: toggleFavorite } = useRoomFavorite(room.roomId);
 
   return (
     <div className="flex items-center gap-1 px-2 py-1.5 text-sm hover:bg-sidebar-accent">

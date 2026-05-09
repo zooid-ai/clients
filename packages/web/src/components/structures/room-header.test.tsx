@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { injectStateEvent, makeFakeClient, makeRoom, mkMatrixEvent } from "../../../test/factories";
 import { MatrixClientPeg } from "../../client/peg";
@@ -32,6 +32,57 @@ function setup(myPL: number) {
   return room;
 }
 
+describe("<RoomHeader> favorite star", () => {
+  it("renders an unstarred toggle for an untagged room", () => {
+    setup(50);
+    render(
+      <MemoryRouter initialEntries={[`/room/${roomId}`]}>
+        <Routes>
+          <Route path="/room/:roomId" element={<RoomHeader spaceId="!space:h.example" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
+  });
+
+  it("calls setRoomTag when the star is clicked on an unfavorited room", async () => {
+    const room = setup(50);
+    const setRoomTag = vi.fn(async () => undefined);
+    const client = MatrixClientPeg.safeGet();
+    (client as unknown as { setRoomTag: typeof setRoomTag }).setRoomTag = setRoomTag;
+    void room;
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[`/room/${roomId}`]}>
+        <Routes>
+          <Route path="/room/:roomId" element={<RoomHeader spaceId="!space:h.example" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole("button", { name: /add to favorites/i }));
+    expect(setRoomTag).toHaveBeenCalledWith(
+      roomId,
+      "m.favourite",
+      expect.objectContaining({ order: expect.any(Number) }),
+    );
+  });
+
+  it("renders a starred toggle for a favorited room", () => {
+    const room = setup(50);
+    (room as unknown as { tags: Record<string, unknown> }).tags = {
+      "m.favourite": { order: 0.5 },
+    };
+    render(
+      <MemoryRouter initialEntries={[`/room/${roomId}`]}>
+        <Routes>
+          <Route path="/room/:roomId" element={<RoomHeader spaceId="!space:h.example" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: /remove from favorites/i })).toBeInTheDocument();
+  });
+});
+
 describe("<RoomHeader> invite affordance", () => {
   it("shows the Invite button to users with PL ≥ invite", async () => {
     setup(50);
@@ -39,7 +90,7 @@ describe("<RoomHeader> invite affordance", () => {
     render(
       <MemoryRouter initialEntries={[`/room/${roomId}`]}>
         <Routes>
-          <Route path="/room/:roomId" element={<RoomHeader />} />
+          <Route path="/room/:roomId" element={<RoomHeader spaceId="!space:h.example" />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -53,7 +104,7 @@ describe("<RoomHeader> invite affordance", () => {
     render(
       <MemoryRouter initialEntries={[`/room/${roomId}`]}>
         <Routes>
-          <Route path="/room/:roomId" element={<RoomHeader />} />
+          <Route path="/room/:roomId" element={<RoomHeader spaceId="!space:h.example" />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -67,7 +118,7 @@ describe("<RoomHeader> invite affordance", () => {
     render(
       <MemoryRouter initialEntries={[`/room/${roomId}`]}>
         <Routes>
-          <Route path="/room/:roomId" element={<RoomHeader />} />
+          <Route path="/room/:roomId" element={<RoomHeader spaceId="!space:h.example" />} />
         </Routes>
       </MemoryRouter>,
     );

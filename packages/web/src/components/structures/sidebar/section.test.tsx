@@ -5,7 +5,7 @@ import { Section } from "./section";
 describe("<Section>", () => {
   it("renders header, action slot, and children", () => {
     render(
-      <Section title="Rooms" id="rooms" action={<button>+</button>}>
+      <Section title="Rooms" action={<button>+</button>}>
         <div>row</div>
       </Section>,
     );
@@ -14,18 +14,48 @@ describe("<Section>", () => {
     expect(screen.getByText("row")).toBeInTheDocument();
   });
 
-  it("collapses and expands on header click; persists state in localStorage", () => {
-    localStorage.removeItem("zoon.sidebar.section.rooms");
+  it("collapses and expands on header click", () => {
     render(
-      <Section title="Rooms" id="rooms">
+      <Section title="Rooms">
         <div>row</div>
       </Section>,
     );
     fireEvent.click(screen.getByRole("button", { name: /toggle Rooms section/i }));
     expect(screen.queryByText("row")).not.toBeInTheDocument();
-    expect(localStorage.getItem("zoon.sidebar.section.rooms")).toBe("collapsed");
     fireEvent.click(screen.getByRole("button", { name: /toggle Rooms section/i }));
     expect(screen.getByText("row")).toBeInTheDocument();
-    expect(localStorage.getItem("zoon.sidebar.section.rooms")).toBe("expanded");
+  });
+
+  it("starts expanded by default", () => {
+    render(
+      <Section title="Rooms">
+        <div>row</div>
+      </Section>,
+    );
+    expect(screen.getByText("row")).toBeInTheDocument();
+  });
+
+  it("starts collapsed when defaultExpanded={false}", () => {
+    render(
+      <Section title="DMs" defaultExpanded={false}>
+        <div>row</div>
+      </Section>,
+    );
+    expect(screen.queryByText("row")).not.toBeInTheDocument();
+  });
+
+  it("does not read or write localStorage", () => {
+    const before = { ...localStorage };
+    render(
+      <Section title="Rooms">
+        <div>row</div>
+      </Section>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /toggle Rooms section/i }));
+    fireEvent.click(screen.getByRole("button", { name: /toggle Rooms section/i }));
+    // No new keys should have been written.
+    for (const k of Object.keys(localStorage)) {
+      expect(k in before).toBe(true);
+    }
   });
 });

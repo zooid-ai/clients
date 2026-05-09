@@ -90,7 +90,7 @@ export function CreateDmDialog({ open, spaceId, onOpenChange }: CreateDmDialogPr
         <DialogHeader>
           <DialogTitle>Start a DM</DialogTitle>
           <DialogDescription>
-            DMs are private to the people you invite. Agents are managed via the workforce config.
+            DMs are private to the people you invite. Agents are managed via <code>zooid.yaml</code>.
           </DialogDescription>
         </DialogHeader>
         {!ready && (

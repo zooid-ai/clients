@@ -43,32 +43,13 @@ export function Sidebar({ spaceId }: SidebarProps) {
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-2 p-2">
-        <Section title="Favorites" id="favorites">
+        <Section title="Favorites">
           {favList.map((r) => (
             <RoomRow key={r.roomId} room={r} />
           ))}
         </Section>
         <Section
-          title="DMs"
-          id="dms"
-          action={
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label="start dm"
-              onClick={() => setCreateDmOpen(true)}
-            >
-              <Plus className="size-3" />
-            </Button>
-          }
-        >
-          {dmList.map((r) => (
-            <RoomRow key={r.roomId} room={r} />
-          ))}
-        </Section>
-        <Section
           title="Rooms"
-          id="rooms"
           action={
             canCreateRoom ? (
               <Button
@@ -83,6 +64,24 @@ export function Sidebar({ spaceId }: SidebarProps) {
           }
         >
           {roomList.map((r) => (
+            <RoomRow key={r.roomId} room={r} />
+          ))}
+        </Section>
+        <Section
+          title="DMs"
+          defaultExpanded={false}
+          action={
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="start dm"
+              onClick={() => setCreateDmOpen(true)}
+            >
+              <Plus className="size-3" />
+            </Button>
+          }
+        >
+          {dmList.map((r) => (
             <RoomRow key={r.roomId} room={r} />
           ))}
         </Section>

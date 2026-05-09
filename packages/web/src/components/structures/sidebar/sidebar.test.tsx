@@ -80,13 +80,16 @@ function seed(opts: { myPL?: number } = {}) {
 }
 
 describe("<Sidebar>", () => {
-  it("renders three sections and routes each room to its first-claim section", () => {
+  it("renders three sections and routes each room to its first-claim section", async () => {
     seed();
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <Sidebar spaceId={spaceId} />
       </MemoryRouter>,
     );
+    // DMs is collapsed by default; expand it so we can inspect its rows.
+    await user.click(screen.getByRole("button", { name: /toggle DMs section/i }));
 
     const favorites = screen.getByRole("region", { name: "Favorites" });
     const dms = screen.getByRole("region", { name: "DMs" });
@@ -102,6 +105,50 @@ describe("<Sidebar>", () => {
 
     // !general is plain space child — appears in Rooms.
     expect(within(rooms).getByText("general")).toBeInTheDocument();
+  });
+
+  it("renders sections in order: Favorites, Rooms, DMs", () => {
+    seed();
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
+    expect(regions).toEqual(["Favorites", "Rooms", "DMs"]);
+  });
+
+  it("starts with Rooms and Favorites expanded, DMs collapsed", () => {
+    seed();
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    const rooms = screen.getByRole("region", { name: "Rooms" });
+    const favorites = screen.getByRole("region", { name: "Favorites" });
+    const dms = screen.getByRole("region", { name: "DMs" });
+    expect(within(rooms).getByText("general")).toBeInTheDocument();
+    expect(within(favorites).getByText("starred")).toBeInTheDocument();
+    expect(within(dms).queryByText("Bob")).not.toBeInTheDocument();
+  });
+
+  it("does not depend on localStorage for default section state", () => {
+    // Even with stale 'collapsed' / 'expanded' entries from a prior version
+    // of the code, defaults must still apply. (The component should not
+    // read these keys.)
+    localStorage.setItem("zoon.sidebar.section.rooms", "collapsed");
+    localStorage.setItem("zoon.sidebar.section.dms", "expanded");
+    localStorage.setItem("zoon.sidebar.section.favorites", "collapsed");
+    seed();
+    render(
+      <MemoryRouter>
+        <Sidebar spaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByRole("region", { name: "Rooms" })).getByText("general")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Favorites" })).getByText("starred")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "DMs" })).queryByText("Bob")).not.toBeInTheDocument();
   });
 });
 
