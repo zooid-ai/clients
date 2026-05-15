@@ -1,8 +1,14 @@
-import { Star } from "lucide-react";
+import { ChevronDown, Star } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useMatch } from "react-router-dom";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -14,8 +20,9 @@ import { useMembers } from "../../hooks/use-members";
 import { useMyPowerLevel } from "../../hooks/use-my-power-level";
 import { usePresence } from "../../hooks/use-presence";
 import { useRoomFavorite } from "../../hooks/use-room-favorite";
-import { displayNameOf } from "../../lib/sender";
+import { useUserName } from "../../hooks/use-user-name";
 import { InviteUserDialog } from "../dialogs/invite-user";
+import { RenameRoomDialog } from "../dialogs/rename-room";
 
 interface RoomHeaderProps {
   spaceId: string | null;
@@ -33,6 +40,7 @@ export function RoomHeader({ spaceId }: RoomHeaderProps) {
   const myPL = useMyPowerLevel(roomId ?? "");
   const { isFavorite, toggle: toggleFavorite } = useRoomFavorite(roomId ?? "");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   if (!roomId || !client) return null;
 
@@ -43,11 +51,33 @@ export function RoomHeader({ spaceId }: RoomHeaderProps) {
       invite?: number;
     } | null)?.invite ?? 50;
   const canInvite = myPL.level >= invitePL;
+  const canRename = myPL.canSendStateEvent("m.room.name");
 
   return (
     <>
       <Separator orientation="vertical" className="h-4" />
-      <span className="text-sm font-medium truncate max-w-48">{roomName}</span>
+      {canRename ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Room actions"
+              className="h-7 max-w-48 gap-1 truncate px-1.5 text-sm font-medium"
+            >
+              <span className="truncate">{roomName}</span>
+              <ChevronDown className="size-3.5 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+              Rename room
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <span className="text-sm font-medium truncate max-w-48">{roomName}</span>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -84,7 +114,7 @@ export function RoomHeader({ spaceId }: RoomHeaderProps) {
             <ul className="space-y-1">
               {members.map((m) => (
                 <li key={m.userId} className="flex items-center gap-2 py-0.5">
-                  <MemberRow userId={m.userId} />
+                  <MemberRow roomId={roomId} userId={m.userId} />
                 </li>
               ))}
             </ul>
@@ -99,16 +129,23 @@ export function RoomHeader({ spaceId }: RoomHeaderProps) {
           onOpenChange={setInviteOpen}
         />
       )}
+      <RenameRoomDialog
+        open={renameOpen}
+        roomId={roomId}
+        currentName={roomName}
+        onOpenChange={setRenameOpen}
+      />
     </>
   );
 }
 
-function MemberRow({ userId }: { userId: string }) {
+function MemberRow({ roomId, userId }: { roomId: string; userId: string }) {
   const { presence } = usePresence(userId);
+  const name = useUserName(userId, roomId);
   return (
     <>
       <UserAvatar userId={userId} size="sm" presence={presence} />
-      <span className="text-sm truncate">{displayNameOf(userId)}</span>
+      <span className="text-sm truncate">{name}</span>
     </>
   );
 }

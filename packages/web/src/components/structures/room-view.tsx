@@ -39,7 +39,7 @@ export function RoomView() {
           />
         )}
       </div>
-      <TypingIndicator typingUserIds={typingUserIds} />
+      <TypingIndicator typingUserIds={typingUserIds} roomId={roomId} />
       <Composer
         roomId={roomId}
         threadRootEventId={threadRootEventId}

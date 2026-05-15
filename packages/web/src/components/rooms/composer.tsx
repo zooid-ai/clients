@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { displayNameOf, senderColor } from "@/lib/sender";
+import { displayNameOf, expandMentions, nameOfMember, senderColor } from "@/lib/sender";
 import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
@@ -25,8 +25,6 @@ interface AutocompleteState {
   start: number;
   query: string;
 }
-
-const USER_ID_IN_BODY = /@[A-Za-z0-9._\-=/+]+:[A-Za-z0-9.\-]+/g;
 
 function truncate(s: string, max: number): string {
   const trimmed = s.replace(/\s+/g, " ").trim();
@@ -67,7 +65,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
 
   const rawMembers = useMembers(roomId);
   const members = useMemo<Member[]>(
-    () => rawMembers.map((m) => ({ userId: m.userId, name: m.name || displayNameOf(m.userId) })),
+    () => rawMembers.map((m) => ({ userId: m.userId, name: nameOfMember(m) })),
     [rawMembers],
   );
 
@@ -83,8 +81,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
       .filter(
         (m) =>
           m.userId.toLowerCase().includes(q) ||
-          m.name.toLowerCase().includes(q) ||
-          displayNameOf(m.userId).toLowerCase().includes(q),
+          m.name.toLowerCase().includes(q),
       )
       .slice(0, 8);
   }, [ac, members]);
@@ -140,7 +137,10 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     if (!ac) return;
     const before = value.slice(0, ac.start);
     const after = value.slice(ac.start + 1 + ac.query.length);
-    const insert = member.userId + " ";
+    // Insert the localpart, not the displayname — the body must stay
+    // mxid-tokenizable so expandMentions() can resolve it. The dropdown
+    // shows the displayname so users see what they're picking.
+    const insert = `@${displayNameOf(member.userId)} `;
     const next = before + insert + after;
     setValue(next);
     setAc(null);
@@ -198,8 +198,8 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
         setValue("");
         return;
       }
-      const mentionUserIds = Array.from(new Set(body.match(USER_ID_IN_BODY) ?? []));
-      const content: Record<string, unknown> = { msgtype: "m.text", body };
+      const { body: expandedBody, userIds: mentionUserIds } = expandMentions(body, members);
+      const content: Record<string, unknown> = { msgtype: "m.text", body: expandedBody };
       if (mentionUserIds.length > 0) {
         content["m.mentions"] = { user_ids: mentionUserIds };
       }
@@ -324,7 +324,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
                   }
                 >
                   <span className="font-semibold" style={{ color: senderColor(m.userId) }}>
-                    {displayNameOf(m.userId)}
+                    {m.name}
                   </span>
                   <span className="text-xs text-muted-foreground">{m.userId}</span>
                 </li>

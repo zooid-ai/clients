@@ -1,21 +1,23 @@
-import { displayNameOf, senderColor } from "@/lib/sender";
+import { senderColor } from "@/lib/sender";
+import { useUserName } from "../../hooks/use-user-name";
 
 interface Props {
   typingUserIds: string[];
+  roomId?: string;
 }
 
-export function TypingIndicator({ typingUserIds }: Props) {
+function TypingName({ userId, roomId }: { userId: string; roomId?: string }) {
+  return (
+    <span style={{ color: senderColor(userId) }}>{useUserName(userId, roomId)}</span>
+  );
+}
+
+export function TypingIndicator({ typingUserIds, roomId }: Props) {
   if (typingUserIds.length === 0) return <div className="h-5" aria-hidden />;
 
   const MAX_NAMES = 2;
   const named = typingUserIds.slice(0, MAX_NAMES);
   const overflow = typingUserIds.length - MAX_NAMES;
-
-  const nameSpans = named.map((uid) => (
-    <span key={uid} style={{ color: senderColor(uid) }}>
-      {displayNameOf(uid)}
-    </span>
-  ));
 
   let suffix: string;
   if (overflow > 0) {
@@ -27,9 +29,9 @@ export function TypingIndicator({ typingUserIds }: Props) {
   }
 
   const parts: React.ReactNode[] = [];
-  nameSpans.forEach((s, i) => {
+  named.forEach((uid, i) => {
     if (i > 0) parts.push(<span key={`sep-${i}`}>, </span>);
-    parts.push(s);
+    parts.push(<TypingName key={uid} userId={uid} roomId={roomId} />);
   });
 
   return (

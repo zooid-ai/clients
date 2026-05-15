@@ -12,6 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MatrixClientPeg } from "./client/peg";
 import { AuthCallback } from "./components/auth/auth-callback";
 import { Login } from "./components/auth/login";
+import { EmptyRoom } from "./components/structures/empty-room";
 import { LoggedInView } from "./components/structures/logged-in-view";
 import { RoomView } from "./components/structures/room-view";
 import { useAuthState } from "./hooks/use-auth-state";
@@ -76,7 +77,7 @@ function AppRoutes({ config }: { config: AppConfig }) {
         path="/"
         element={auth === "logged-in" ? <LoggedInView /> : <Navigate to="/login" replace />}
       >
-        <Route index element={<div className="empty-room">Select a room</div>} />
+        <Route index element={<EmptyRoom />} />
         <Route path="room/:roomId" element={<RoomView />} />
       </Route>
       <Route

@@ -12,8 +12,8 @@ import {
   X,
 } from "lucide-react";
 import type { DecodedEcoZoonEvent } from "../../events/eco-zoon";
-import { displayNameOf } from "@/lib/sender";
 import { useToolCallApproval, useToolCallStatus } from "@/hooks/use-timeline";
+import { useUserName } from "@/hooks/use-user-name";
 
 interface Props {
   decoded: DecodedEcoZoonEvent;
@@ -24,9 +24,10 @@ interface Props {
 }
 
 export function EcoZoonEventTile({ decoded, sender, roomId, ts }: Props) {
+  const senderName = useUserName(sender, roomId);
   switch (decoded.kind) {
     case "session.start":
-      return <Divider text={`${displayNameOf(sender)} started session`} />;
+      return <Divider text={`${senderName} started session`} />;
 
     case "turn.start":
       return null;
@@ -37,7 +38,7 @@ export function EcoZoonEventTile({ decoded, sender, roomId, ts }: Props) {
     case "message_chunk":
       return (
         <div className="py-1 text-sm text-foreground/80">
-          <span className="font-mono text-muted-foreground mr-2">{displayNameOf(sender)}</span>
+          <span className="font-mono text-muted-foreground mr-2">{senderName}</span>
           {decoded.content}
         </div>
       );
@@ -131,6 +132,7 @@ function ToolCallCard({
   const [open, setOpen] = useState(false);
   const { status, content, latestUpdateTs } = useToolCallStatus(roomId, decoded.toolCallId);
   const approval = useToolCallApproval(roomId, decoded.toolCallId);
+  const senderName = useUserName(sender, roomId);
   const Icon = toolIcon(decoded.toolKind);
   const title = decoded.title ?? decoded.toolKind ?? "Tool call";
 
@@ -182,7 +184,7 @@ function ToolCallCard({
             </div>
           )}
           <div>
-            <span className="text-foreground/70">by</span> {displayNameOf(sender)}
+            <span className="text-foreground/70">by</span> {senderName}
           </div>
           <div className="font-mono break-all">id: {decoded.toolCallId}</div>
           {decoded.locations && decoded.locations.length > 0 && (

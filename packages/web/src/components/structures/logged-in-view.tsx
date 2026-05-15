@@ -21,13 +21,14 @@ import { MatrixClientPeg } from "../../client/peg";
 import { useActiveSpaceId } from "../../hooks/use-active-space-id";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useSpaceName } from "../../hooks/use-space-name";
-import { displayNameOf } from "../../lib/sender";
+import { useUserName } from "../../hooks/use-user-name";
 import { LeftPanel } from "./left-panel";
 import { RoomHeader } from "./room-header";
 
 export function LoggedInView() {
   const client = useMatrixClient();
   const userId = client.getUserId() ?? "";
+  const myName = useUserName(userId);
   const serverName = userId.split(":")[1] ?? userId;
   const spaceLocalpart =
     (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
@@ -63,7 +64,7 @@ export function LoggedInView() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem disabled className="font-medium">
-                {displayNameOf(userId)}
+                {myName}
               </DropdownMenuItem>
               <DropdownMenuItem disabled className="text-xs text-muted-foreground">
                 {userId}

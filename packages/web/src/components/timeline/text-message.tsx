@@ -1,16 +1,30 @@
 import type { MatrixEvent } from "matrix-js-sdk";
 import { MessageSquare } from "lucide-react";
-import { displayNameOf, senderColor, splitMentions } from "@/lib/sender";
+import { senderColor, splitMentions } from "@/lib/sender";
 import { UserAvatar } from "@/components/user-avatar";
 import { usePresence } from "@/hooks/use-presence";
 import { useReactions } from "@/hooks/use-reactions";
 import { useThreadPreview } from "@/hooks/use-timeline";
+import { useUserName } from "@/hooks/use-user-name";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
 
 function AvatarWithPresence({ userId }: { userId: string }) {
   const { presence } = usePresence(userId);
   return <UserAvatar userId={userId} size="sm" presence={presence} />;
+}
+
+function MentionPill({ userId, roomId }: { userId: string; roomId: string }) {
+  const name = useUserName(userId, roomId);
+  return (
+    <span
+      className="rounded-sm bg-primary/15 px-1 font-medium"
+      style={{ color: senderColor(userId) }}
+      title={userId}
+    >
+      @{name}
+    </span>
+  );
 }
 
 export interface TextMessageProps {
@@ -23,12 +37,14 @@ export interface TextMessageProps {
 
 function InlineReply({ event }: { event: MatrixEvent }) {
   const c = event.getContent() as { msgtype?: string; body?: string };
-  if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
   const sender = event.getSender() ?? "?";
+  const roomId = event.getRoomId() ?? "";
+  const name = useUserName(sender, roomId);
+  if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
   return (
     <div className="text-sm leading-5">
       <span className="font-semibold" style={{ color: senderColor(sender) }}>
-        {displayNameOf(sender)}
+        {name}
       </span>
       <span className="text-foreground/80 ml-1.5">{c.body ?? ""}</span>
     </div>
@@ -42,11 +58,11 @@ export function TextMessage({
   disableThreadAffordances,
 }: TextMessageProps) {
   const c = event.getContent() as { msgtype?: string; body?: string };
-  if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
   const sender = event.getSender() ?? "?";
   const body = c.body ?? "";
   const eventId = event.getId() ?? "";
   const roomId = event.getRoomId() ?? "";
+  const senderName = useUserName(sender, roomId);
 
   // When disabled, pass an empty rootId so the hook short-circuits and returns no preview.
   const { events: threadEvents, totalCount } = useThreadPreview(
@@ -54,6 +70,7 @@ export function TextMessage({
     disableThreadAffordances ? "" : eventId,
   );
   const reactions = useReactions(roomId, eventId);
+  if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
 
   return (
     <div className="group relative flex gap-2 py-1.5 hover:bg-muted/30">
@@ -66,19 +83,12 @@ export function TextMessage({
           style={{ color: senderColor(sender) }}
           title={sender}
         >
-          {displayNameOf(sender)}
+          {senderName}
         </span>
         <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
           {splitMentions(body).map((seg, i) =>
             seg.userId ? (
-              <span
-                key={i}
-                className="rounded-sm bg-primary/15 px-1 font-medium"
-                style={{ color: senderColor(seg.userId) }}
-                title={seg.userId}
-              >
-                @{displayNameOf(seg.userId)}
-              </span>
+              <MentionPill key={i} userId={seg.userId} roomId={roomId} />
             ) : (
               <span key={i}>{seg.text}</span>
             ),
