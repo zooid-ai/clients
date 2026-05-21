@@ -22,7 +22,7 @@ export function RoomRow({ room }: RoomRowProps) {
   const isUnread = total > 0;
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1.5 text-sm hover:bg-sidebar-accent">
+    <div className="group/row flex items-center gap-1 px-2 py-1.5 text-sm hover:bg-sidebar-accent">
       <Link to={`/room/${room.roomId}`} className="flex flex-1 items-center gap-2 truncate">
         <Avatar className="size-6">
           <AvatarFallback>{(room.name ?? room.roomId).slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -31,23 +31,28 @@ export function RoomRow({ room }: RoomRowProps) {
           {room.name || room.roomId}
         </span>
       </Link>
-      <UnreadBadge total={total} highlight={highlight} />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="room actions"
-            className="opacity-0 hover:opacity-100 focus:opacity-100"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuItem onClick={toggleFavorite}>
-            {isFavorite ? "Remove from favorites" : "Add to favorites"}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Single trailing slot: badge shows by default, dropdown trigger replaces it on row hover/focus. */}
+      <div className="relative h-5 min-w-5">
+        <div className="group-hover/row:invisible group-focus-within/row:invisible">
+          <UnreadBadge total={total} highlight={highlight} />
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="room actions"
+              className="absolute right-0 top-0 inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
+            >
+              <MoreHorizontal className="size-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={toggleFavorite}>
+              {isFavorite ? "Remove from favorites" : "Add to favorites"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

@@ -82,7 +82,22 @@ export function FormattedMessageBody({ html, roomId }: Props) {
   };
 
   return (
-    <div className="prose-message min-w-0 break-words text-foreground text-sm leading-6">
+    <div
+      className={[
+        "prose prose-sm dark:prose-invert max-w-none min-w-0 break-words",
+        // Tighter vertical rhythm than the default `prose` for chat density,
+        // and re-bind the prose color tokens to the shadcn theme so the
+        // Reef palette stays consistent across light/dark.
+        "prose-p:my-1 prose-headings:mt-3 prose-headings:mb-1",
+        "prose-pre:my-2 prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border",
+        "prose-code:bg-muted prose-code:text-foreground prose-code:rounded-sm prose-code:px-1 prose-code:py-px prose-code:font-normal",
+        "prose-code:before:content-none prose-code:after:content-none",
+        "prose-a:text-primary prose-a:underline prose-a:underline-offset-2",
+        "prose-blockquote:border-muted-foreground/40 prose-blockquote:text-muted-foreground prose-blockquote:not-italic",
+        "prose-hr:border-border",
+        "prose-strong:text-foreground prose-headings:text-foreground",
+      ].join(" ")}
+    >
       {parse(clean, options)}
     </div>
   );

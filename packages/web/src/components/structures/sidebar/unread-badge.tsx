@@ -1,22 +1,21 @@
 interface UnreadBadgeProps {
   total: number;
   highlight: number;
-  /** When true, render in compact rollup style (smaller, used in section headers). */
+  /** Kept for backwards compatibility; size is now uniform across the sidebar. */
   compact?: boolean;
 }
 
-export function UnreadBadge({ total, highlight, compact }: UnreadBadgeProps) {
+export function UnreadBadge({ total, highlight }: UnreadBadgeProps) {
   if (total <= 0) return null;
   const display = total > 99 ? "99+" : String(total);
   const tone =
     highlight > 0
       ? "bg-destructive text-destructive-foreground"
       : "bg-muted text-muted-foreground";
-  const size = compact ? "text-[10px] px-1.5 py-0 min-w-4" : "text-xs px-1.5 py-0.5 min-w-5";
   return (
     <span
       aria-label={`${total} unread`}
-      className={`inline-flex items-center justify-center rounded-full font-medium tabular-nums ${tone} ${size}`}
+      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-medium tabular-nums ${tone}`}
     >
       {display}
     </span>

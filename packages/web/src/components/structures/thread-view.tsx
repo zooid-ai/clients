@@ -75,7 +75,7 @@ export function ThreadView({
           Back
         </button>
         <span className="text-sm font-medium">
-          Thread {totalCount > 0 ? `(${totalCount} ${totalCount === 1 ? "reply" : "replies"})` : ""}
+          Thread {totalCount > 0 ? `(${totalCount} ${totalCount === 1 ? "event" : "events"})` : ""}
         </span>
       </header>
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto">

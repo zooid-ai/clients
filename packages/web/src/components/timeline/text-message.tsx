@@ -37,17 +37,32 @@ export interface TextMessageProps {
 }
 
 function InlineReply({ event }: { event: MatrixEvent }) {
-  const c = event.getContent() as { msgtype?: string; body?: string };
+  const c = event.getContent() as {
+    msgtype?: string;
+    body?: string;
+    format?: string;
+    formatted_body?: string;
+  };
   const sender = event.getSender() ?? "?";
   const roomId = event.getRoomId() ?? "";
   const name = useUserName(sender, roomId);
+  const hasFormatted =
+    c.format === "org.matrix.custom.html" &&
+    typeof c.formatted_body === "string" &&
+    c.formatted_body.length > 0;
   if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
   return (
-    <div className="text-sm leading-5">
-      <span className="font-semibold" style={{ color: senderColor(sender) }}>
+    <div className="flex items-baseline gap-1.5 text-sm leading-5">
+      <span className="shrink-0 font-semibold" style={{ color: senderColor(sender) }}>
         {name}
       </span>
-      <span className="text-foreground/80 ml-1.5">{c.body ?? ""}</span>
+      {hasFormatted ? (
+        <div className="line-clamp-2 min-w-0 flex-1 text-foreground/80">
+          <FormattedMessageBody html={c.formatted_body!} roomId={roomId} />
+        </div>
+      ) : (
+        <span className="line-clamp-2 min-w-0 flex-1 text-foreground/80">{c.body ?? ""}</span>
+      )}
     </div>
   );
 }

@@ -6,13 +6,15 @@ import { useFavoriteRooms } from "../../../hooks/use-favorite-rooms";
 import { useMyPowerLevel } from "../../../hooks/use-my-power-level";
 import { useSectionUnread } from "../../../hooks/use-section-unread";
 import { useSpaceChildren } from "../../../hooks/use-space-children";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CreateDmDialog } from "../../dialogs/create-dm";
 import { CreateRoomDialog } from "../../dialogs/create-room";
 import { RoomRow } from "./room-row";
 import { Section } from "./section";
 import { UnreadBadge } from "./unread-badge";
+
+const ICON_BTN_CLS =
+  "inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground";
 
 interface SidebarProps {
   spaceId: string;
@@ -51,7 +53,7 @@ export function Sidebar({ spaceId }: SidebarProps) {
       <div className="flex flex-col gap-2 p-2">
         <Section
           title="Favorites"
-          action={<UnreadBadge total={favUnread.total} highlight={favUnread.highlight} compact />}
+          action={<UnreadBadge total={favUnread.total} highlight={favUnread.highlight} />}
         >
           {favList.map((r) => (
             <RoomRow key={r.roomId} room={r} />
@@ -61,16 +63,16 @@ export function Sidebar({ spaceId }: SidebarProps) {
           title="Rooms"
           action={
             <div className="flex items-center gap-1">
-              <UnreadBadge total={roomUnread.total} highlight={roomUnread.highlight} compact />
+              <UnreadBadge total={roomUnread.total} highlight={roomUnread.highlight} />
               {canCreateRoom ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
+                <button
+                  type="button"
                   aria-label="add channel"
                   onClick={() => setCreateRoomOpen(true)}
+                  className={ICON_BTN_CLS}
                 >
                   <Plus className="size-3" />
-                </Button>
+                </button>
               ) : null}
             </div>
           }
@@ -84,15 +86,15 @@ export function Sidebar({ spaceId }: SidebarProps) {
           defaultExpanded={false}
           action={
             <div className="flex items-center gap-1">
-              <UnreadBadge total={dmUnread.total} highlight={dmUnread.highlight} compact />
-              <Button
-                size="sm"
-                variant="ghost"
+              <UnreadBadge total={dmUnread.total} highlight={dmUnread.highlight} />
+              <button
+                type="button"
                 aria-label="start dm"
                 onClick={() => setCreateDmOpen(true)}
+                className={ICON_BTN_CLS}
               >
                 <Plus className="size-3" />
-              </Button>
+              </button>
             </div>
           }
         >

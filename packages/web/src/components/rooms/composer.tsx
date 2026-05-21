@@ -264,13 +264,15 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
       )}
       {threadRootEventId && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 min-w-0">
-          <span className="shrink-0">Replying to</span>
           {replyingToBody ? (
-            <span className="truncate italic text-foreground/70">
-              "{truncate(replyingToBody, 60)}"
-            </span>
+            <>
+              <span className="shrink-0">Replying to</span>
+              <span className="truncate italic text-foreground/70">
+                "{truncate(replyingToBody, 60)}"
+              </span>
+            </>
           ) : (
-            <span className="h-3 w-32 rounded bg-muted animate-pulse" aria-busy="true" />
+            <span className="shrink-0">Replying in current thread</span>
           )}
           <button
             type="button"

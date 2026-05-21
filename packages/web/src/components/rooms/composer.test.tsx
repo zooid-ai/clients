@@ -143,7 +143,7 @@ describe("<Composer /> thread mode", () => {
   it("renders a 'replying to' chrome with an exit affordance", async () => {
     setup();
     render(<Composer roomId={roomId} threadRootEventId="$root" onExitThread={vi.fn()} />);
-    expect(screen.getByText(/replying to/i)).toBeDefined();
+    expect(screen.getByText(/replying (to|in current thread)/i)).toBeDefined();
     expect(screen.getByRole("button", { name: /exit thread|cancel|close/i })).toBeDefined();
   });
 
