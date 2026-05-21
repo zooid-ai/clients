@@ -94,6 +94,57 @@ describe("<TextMessage /> inline thread preview", () => {
   });
 });
 
+describe("<TextMessage> formatted_body", () => {
+  const makeFormattedEvent = (content: Record<string, unknown>) =>
+    makeMatrixEvent({
+      eventId: "$fmt",
+      roomId: "!r:h.example",
+      sender: "@alice:h.example",
+      type: "m.room.message",
+      content,
+    });
+
+  it("renders formatted_body when format is org.matrix.custom.html", () => {
+    render(
+      <TextMessage
+        event={makeFormattedEvent({
+          msgtype: "m.text",
+          body: "**bold**",
+          format: "org.matrix.custom.html",
+          formatted_body: "<p><strong>bold</strong></p>",
+        })}
+      />,
+    );
+    expect(screen.getByText("bold").tagName).toBe("STRONG");
+  });
+
+  it("falls back to plain body when no formatted_body is set", () => {
+    const { container } = render(
+      <TextMessage
+        event={makeFormattedEvent({ msgtype: "m.text", body: "**still raw**" })}
+      />,
+    );
+    // No <strong> rendered — we did NOT re-parse markdown on the client.
+    expect(container.querySelector("strong")).toBeNull();
+    expect(screen.getByText("**still raw**")).toBeInTheDocument();
+  });
+
+  it("falls back to plain body when format is unknown", () => {
+    const { container } = render(
+      <TextMessage
+        event={makeFormattedEvent({
+          msgtype: "m.text",
+          body: "plain",
+          format: "something.else",
+          formatted_body: "<strong>nope</strong>",
+        })}
+      />,
+    );
+    expect(container.querySelector("strong")).toBeNull();
+    expect(screen.getByText("plain")).toBeInTheDocument();
+  });
+});
+
 describe("<TextMessage> reactions", () => {
   it("shows a hover-only 'add reaction' button next to 'Reply in thread'", () => {
     render(<TextMessage event={rootEvent()} />);

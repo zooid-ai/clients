@@ -6,6 +6,7 @@ import { usePresence } from "@/hooks/use-presence";
 import { useReactions } from "@/hooks/use-reactions";
 import { useThreadPreview } from "@/hooks/use-timeline";
 import { useUserName } from "@/hooks/use-user-name";
+import { FormattedMessageBody } from "./formatted-message-body";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
 
@@ -57,12 +58,21 @@ export function TextMessage({
   onViewThread,
   disableThreadAffordances,
 }: TextMessageProps) {
-  const c = event.getContent() as { msgtype?: string; body?: string };
+  const c = event.getContent() as {
+    msgtype?: string;
+    body?: string;
+    format?: string;
+    formatted_body?: string;
+  };
   const sender = event.getSender() ?? "?";
   const body = c.body ?? "";
   const eventId = event.getId() ?? "";
   const roomId = event.getRoomId() ?? "";
   const senderName = useUserName(sender, roomId);
+  const hasFormatted =
+    c.format === "org.matrix.custom.html" &&
+    typeof c.formatted_body === "string" &&
+    c.formatted_body.length > 0;
 
   // When disabled, pass an empty rootId so the hook short-circuits and returns no preview.
   const { events: threadEvents, totalCount } = useThreadPreview(
@@ -85,15 +95,19 @@ export function TextMessage({
         >
           {senderName}
         </span>
-        <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
-          {splitMentions(body).map((seg, i) =>
-            seg.userId ? (
-              <MentionPill key={i} userId={seg.userId} roomId={roomId} />
-            ) : (
-              <span key={i}>{seg.text}</span>
-            ),
-          )}
-        </p>
+        {hasFormatted ? (
+          <FormattedMessageBody html={c.formatted_body!} roomId={roomId} />
+        ) : (
+          <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
+            {splitMentions(body).map((seg, i) =>
+              seg.userId ? (
+                <MentionPill key={i} userId={seg.userId} roomId={roomId} />
+              ) : (
+                <span key={i}>{seg.text}</span>
+              ),
+            )}
+          </p>
+        )}
 
         <ReactionsRow roomId={roomId} eventId={eventId} reactions={reactions} />
 
