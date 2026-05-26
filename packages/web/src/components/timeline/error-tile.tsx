@@ -3,13 +3,7 @@ import type { DecodedEcoZoonEvent } from "../../events/eco-zoon";
 
 type ErrorDecoded = Extract<DecodedEcoZoonEvent, { kind: "error" }>;
 
-export function ErrorTile({
-  decoded,
-  onRetry,
-}: {
-  decoded: ErrorDecoded;
-  onRetry: () => void;
-}) {
+export function ErrorTile({ decoded }: { decoded: ErrorDecoded }) {
   const handleCopy = () => {
     const payload: Record<string, unknown> = {
       code: decoded.code,
@@ -37,15 +31,6 @@ export function ErrorTile({
             </details>
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            {decoded.transient && (
-              <button
-                type="button"
-                className="rounded border border-border px-2 py-0.5 hover:bg-accent"
-                onClick={onRetry}
-              >
-                Retry
-              </button>
-            )}
             <button
               type="button"
               className="rounded border border-border px-2 py-0.5 hover:bg-accent"

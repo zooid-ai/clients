@@ -19,36 +19,19 @@ const baseDecoded: ErrorDecoded = {
 
 describe("<ErrorTile />", () => {
   it("renders message as the title and a collapsed detail body", () => {
-    render(<ErrorTile decoded={baseDecoded} onRetry={() => {}} />);
+    render(<ErrorTile decoded={baseDecoded} />);
     expect(screen.getByText("Authentication required")).toBeInTheDocument();
     const det = screen.getByText(/claude-agent-acp RequestError/i);
     expect(det.closest("details")).not.toBeNull();
     expect(det.closest("details")!.open).toBe(false);
   });
 
-  it("shows Retry button only when transient", () => {
-    const { rerender } = render(<ErrorTile decoded={baseDecoded} onRetry={() => {}} />);
+  it("Retry button is never shown (not yet implemented)", () => {
+    render(<ErrorTile decoded={baseDecoded} />);
     expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
 
-    rerender(
-      <ErrorTile
-        decoded={{ ...baseDecoded, transient: true, code: "model_rate_limit" }}
-        onRetry={() => {}}
-      />,
-    );
-    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
-  });
-
-  it("Retry button calls onRetry handler", () => {
-    const onRetry = vi.fn();
-    render(
-      <ErrorTile
-        decoded={{ ...baseDecoded, transient: true, code: "model_rate_limit" }}
-        onRetry={onRetry}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-    expect(onRetry).toHaveBeenCalledTimes(1);
+    render(<ErrorTile decoded={{ ...baseDecoded, transient: true, code: "model_rate_limit" }} />);
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
   });
 
   it("Copy details button copies JSON payload to clipboard", async () => {
@@ -58,7 +41,7 @@ describe("<ErrorTile />", () => {
       configurable: true,
     });
 
-    render(<ErrorTile decoded={baseDecoded} onRetry={() => {}} />);
+    render(<ErrorTile decoded={baseDecoded} />);
     fireEvent.click(screen.getByRole("button", { name: /copy details/i }));
     expect(writeText).toHaveBeenCalledTimes(1);
     const arg = writeText.mock.calls[0]![0] as string;
@@ -71,13 +54,13 @@ describe("<ErrorTile />", () => {
   });
 
   it("Learn more link only shown when recovery URL is present", () => {
-    const { rerender } = render(<ErrorTile decoded={baseDecoded} onRetry={() => {}} />);
+    const { rerender } = render(<ErrorTile decoded={baseDecoded} />);
     expect(screen.getByRole("link", { name: /learn more/i })).toHaveAttribute(
       "href",
       baseDecoded.recovery,
     );
 
-    rerender(<ErrorTile decoded={{ ...baseDecoded, recovery: undefined }} onRetry={() => {}} />);
+    rerender(<ErrorTile decoded={{ ...baseDecoded, recovery: undefined }} />);
     expect(screen.queryByRole("link", { name: /learn more/i })).toBeNull();
   });
 });

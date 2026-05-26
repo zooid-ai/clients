@@ -43,14 +43,7 @@ export function EventTile({
     const decoded = decodeEcoZoonEvent(event);
     if (!decoded) return null;
     if (decoded.kind === "error") {
-      return (
-        <ErrorTile
-          decoded={decoded}
-          onRetry={() => {
-            console.warn("[ErrorTile] retry not yet implemented");
-          }}
-        />
-      );
+      return <ErrorTile decoded={decoded} />;
     }
     return (
       <EcoZoonEventTile
