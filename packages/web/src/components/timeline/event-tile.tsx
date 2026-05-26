@@ -3,6 +3,7 @@ import { ApprovalEventType } from "../../events/approval";
 import { decodeEcoZoonEvent, isEcoZoonLifecycle } from "../../events/eco-zoon";
 import { ApprovalCard } from "./approval-card";
 import { EcoZoonEventTile } from "./eco-zoon-event";
+import { ErrorTile } from "./error-tile";
 import { TextMessage } from "./text-message";
 
 export function EventTile({
@@ -41,6 +42,16 @@ export function EventTile({
   if (isEcoZoonLifecycle(event)) {
     const decoded = decodeEcoZoonEvent(event);
     if (!decoded) return null;
+    if (decoded.kind === "error") {
+      return (
+        <ErrorTile
+          decoded={decoded}
+          onRetry={() => {
+            console.warn("[ErrorTile] retry not yet implemented");
+          }}
+        />
+      );
+    }
     return (
       <EcoZoonEventTile
         decoded={decoded}

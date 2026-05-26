@@ -8,6 +8,7 @@ export const EcoZoonEventType = {
   ToolCallUpdate: "eco.zoon.tool_call_update",
   Plan: "eco.zoon.plan",
   TurnEnd: "eco.zoon.turn.end",
+  Error: "eco.zoon.error",
 } as const;
 
 export interface ToolLocation {
@@ -42,7 +43,18 @@ export type DecodedEcoZoonEvent =
       sessionId: string;
       entries: Array<{ id: string; title: string; status: string }>;
     }
-  | { kind: "turn.end"; sessionId: string; stopReason?: string };
+  | { kind: "turn.end"; sessionId: string; stopReason?: string }
+  | {
+      kind: "error";
+      sessionId: string | null;
+      turnId: string | null;
+      code: string;
+      message: string;
+      detail?: string;
+      transient: boolean;
+      acpError?: { code: number; message: string; data?: unknown };
+      recovery?: string;
+    };
 
 const lifecycleTypes: ReadonlySet<string> = new Set(Object.values(EcoZoonEventType));
 
@@ -64,10 +76,31 @@ export function isTurnEnd(ev: MatrixEvent): boolean {
 
 export function decodeEcoZoonEvent(ev: MatrixEvent): DecodedEcoZoonEvent | null {
   const c = ev.getContent() as Record<string, unknown>;
+  const type = ev.getType();
+
+  // Error events allow sessionId to be null (pre-turn failures).
+  if (type === EcoZoonEventType.Error) {
+    if (typeof c.code !== "string" || typeof c.message !== "string") return null;
+    return {
+      kind: "error",
+      sessionId: typeof c.session_id === "string" ? c.session_id : null,
+      turnId: typeof c.turn_id === "string" ? c.turn_id : null,
+      code: c.code,
+      message: c.message,
+      detail: typeof c.detail === "string" ? c.detail : undefined,
+      transient: c.transient === true,
+      acpError:
+        c.acp_error && typeof c.acp_error === "object"
+          ? (c.acp_error as { code: number; message: string; data?: unknown })
+          : undefined,
+      recovery: typeof c.recovery === "string" ? c.recovery : undefined,
+    };
+  }
+
   const sessionId = typeof c.session_id === "string" ? c.session_id : null;
   if (!sessionId) return null;
 
-  switch (ev.getType()) {
+  switch (type) {
     case EcoZoonEventType.SessionStart:
       return { kind: "session.start", sessionId };
 

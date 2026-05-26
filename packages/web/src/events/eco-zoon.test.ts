@@ -9,6 +9,7 @@ import {
   isTurnEnd,
 } from "./eco-zoon";
 
+
 const room = "!r:h.example";
 const sender = "@architect.acme:h.example";
 
@@ -183,5 +184,75 @@ describe("type guards", () => {
     expect(isAgentMessageChunk(chunk)).toBe(true);
     expect(isToolCall(chunk)).toBe(false);
     expect(isTurnEnd(chunk)).toBe(false);
+  });
+});
+
+describe("decodeEcoZoonEvent — error (ZOD055)", () => {
+  it("decodes eco.zoon.error with full payload", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: "eco.zoon.error",
+      content: {
+        session_id: "sess-1",
+        turn_id: "turn-1",
+        code: "auth_missing",
+        message: "Authentication required",
+        detail: "claude-agent-acp RequestError",
+        transient: false,
+        acp_error: { code: -32000, message: "Authentication required" },
+        recovery: "https://zooid.dev/docs/guides/run-in-container#auth",
+      },
+    });
+    expect(decodeEcoZoonEvent(ev)).toEqual({
+      kind: "error",
+      sessionId: "sess-1",
+      turnId: "turn-1",
+      code: "auth_missing",
+      message: "Authentication required",
+      detail: "claude-agent-acp RequestError",
+      transient: false,
+      acpError: { code: -32000, message: "Authentication required" },
+      recovery: "https://zooid.dev/docs/guides/run-in-container#auth",
+    });
+  });
+
+  it("returns null when code missing AND message missing (untyped junk)", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: "eco.zoon.error",
+      content: {},
+    });
+    expect(decodeEcoZoonEvent(ev)).toBeNull();
+  });
+
+  it("allows session_id null (pre-turn error) when code+message present", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: "eco.zoon.error",
+      content: {
+        code: "image_pull_failed",
+        message: "pull failed",
+        transient: true,
+      },
+    });
+    const decoded = decodeEcoZoonEvent(ev);
+    expect(decoded).toMatchObject({ kind: "error", code: "image_pull_failed" });
+  });
+
+  it("isEcoZoonLifecycle returns true for eco.zoon.error", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: "eco.zoon.error",
+      content: {},
+    });
+    expect(isEcoZoonLifecycle(ev)).toBe(true);
+  });
+
+  it("EcoZoonEventType.Error is exported", () => {
+    expect(EcoZoonEventType.Error).toBe("eco.zoon.error");
   });
 });
