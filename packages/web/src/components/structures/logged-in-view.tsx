@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,11 @@ import {
 import { MatrixClientPeg } from "../../client/peg";
 import { useActiveSpaceId } from "../../hooks/use-active-space-id";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
-import { useSpaceName } from "../../hooks/use-space-name";
 import { useUserName } from "../../hooks/use-user-name";
 import { LeftPanel } from "./left-panel";
 import { RoomHeader } from "./room-header";
+import type { Scope } from "./sidebar/scope";
+import { SpaceSwitcher } from "./sidebar/space-switcher";
 
 export function LoggedInView() {
   const client = useMatrixClient();
@@ -33,21 +34,27 @@ export function LoggedInView() {
   const spaceLocalpart =
     (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
   const { spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
-  const spaceName = useSpaceName(spaceId);
-  const headerLabel = spaceName ?? spaceLocalpart;
+  const [scope, setScope] = useState<Scope | null>(null);
 
   useEffect(() => {
     client.startClient({ initialSyncLimit: 10 }).catch(() => {});
   }, [client]);
 
+  useEffect(() => {
+    if (scope) return; // user has chosen; don't override
+    if (spaceId) setScope({ kind: "space", spaceId });
+  }, [spaceId, scope]);
+
+  const activeScope: Scope = scope ?? (spaceId ? { kind: "space", spaceId } : { kind: "home" });
+
   return (
     <SidebarProvider className="h-svh overflow-hidden">
       <Sidebar collapsible="icon">
-        <SidebarHeader className="h-12 flex-row items-center border-b border-sidebar-border px-4">
-          <span className="text-sm font-medium truncate">{headerLabel}</span>
+        <SidebarHeader className="h-12 flex-row items-center border-b border-sidebar-border px-2">
+          <SpaceSwitcher scope={activeScope} onSelect={setScope} />
         </SidebarHeader>
         <SidebarContent>
-          <LeftPanel spaceId={spaceId} />
+          <LeftPanel scope={activeScope} workforceSpaceId={spaceId} />
         </SidebarContent>
       </Sidebar>
       <SidebarInset data-testid="logged-in-view">

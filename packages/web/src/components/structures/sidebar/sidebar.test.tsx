@@ -85,7 +85,7 @@ describe("<Sidebar>", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     // DMs is collapsed by default; expand it so we can inspect its rows.
@@ -111,7 +111,7 @@ describe("<Sidebar>", () => {
     seed();
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
@@ -122,7 +122,7 @@ describe("<Sidebar>", () => {
     seed();
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     const rooms = screen.getByRole("region", { name: "Rooms" });
@@ -143,7 +143,7 @@ describe("<Sidebar>", () => {
     seed();
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     expect(within(screen.getByRole("region", { name: "Rooms" })).getByText("general")).toBeInTheDocument();
@@ -157,7 +157,7 @@ describe("<Sidebar> action affordances", () => {
     seed({ myPL: 100 });
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     expect(screen.getByRole("button", { name: /add channel/i })).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe("<Sidebar> action affordances", () => {
     seed({ myPL: 0 });
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     expect(screen.queryByRole("button", { name: /add channel/i })).not.toBeInTheDocument();
@@ -177,7 +177,7 @@ describe("<Sidebar> action affordances", () => {
     seed({ myPL: 0 });
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     expect(screen.getByRole("button", { name: /start dm/i })).toBeInTheDocument();
@@ -188,11 +188,58 @@ describe("<Sidebar> action affordances", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
     await user.click(screen.getByRole("button", { name: /add channel/i }));
     expect(await screen.findByRole("dialog", { name: /create channel/i })).toBeInTheDocument();
+  });
+});
+
+describe("<Sidebar> home scope", () => {
+  it("lists all joined non-space rooms in Rooms and hides Add Channel", async () => {
+    seed({ myPL: 100 }); // reuse existing seed; gives space + general + dm + fav
+    // In Home, the Rooms section is sourced from useRoomList() (all joined rooms),
+    // not the space's children. #admins-style orphan: a joined room that is NOT a
+    // space child, DM, or favorite — invisible in space scope, visible in Home.
+    const client = MatrixClientPeg.safeGet()!;
+    const admins = (
+      await import("../../../../test/factories")
+    ).makeRoom("!admins:h.example", { client, myUserId: me });
+    (admins as unknown as { name: string }).name = "admins";
+    (client as unknown as { getRooms: () => unknown[] }).getRooms = () => [
+      client.getRoom("!space:h.example"),
+      client.getRoom("!general:h.example"),
+      client.getRoom("!dm:h.example"),
+      client.getRoom("!fav:h.example"),
+      admins,
+    ];
+
+    render(
+      <MemoryRouter>
+        <Sidebar scope={{ kind: "home" }} workforceSpaceId="!space:h.example" />
+      </MemoryRouter>,
+    );
+
+    const rooms = screen.getByRole("region", { name: "Rooms" });
+    expect(within(rooms).getByText("admins")).toBeInTheDocument(); // orphan now visible
+    // Add Channel is space-only — absent in Home.
+    expect(screen.queryByRole("button", { name: /add channel/i })).not.toBeInTheDocument();
+  });
+
+  it("excludes space rooms from the Home Rooms list", () => {
+    seed({ myPL: 100 });
+    const client = MatrixClientPeg.safeGet()!;
+    const space = client.getRoom("!space:h.example")!;
+    (space as unknown as { name: string; isSpaceRoom: () => boolean }).name = "Dev";
+    (space as unknown as { isSpaceRoom: () => boolean }).isSpaceRoom = () => true;
+    render(
+      <MemoryRouter>
+        <Sidebar scope={{ kind: "home" }} workforceSpaceId="!space:h.example" />
+      </MemoryRouter>,
+    );
+    const rooms = screen.getByRole("region", { name: "Rooms" });
+    expect(within(rooms).queryByText("Dev")).not.toBeInTheDocument();
   });
 });
 
@@ -206,7 +253,7 @@ describe("<Sidebar> unread rollups", () => {
 
     render(
       <MemoryRouter>
-        <Sidebar spaceId={spaceId} />
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
       </MemoryRouter>,
     );
 

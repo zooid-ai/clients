@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useDirectRooms } from "../../../hooks/use-direct-rooms";
 import { useFavoriteRooms } from "../../../hooks/use-favorite-rooms";
 import { useMyPowerLevel } from "../../../hooks/use-my-power-level";
+import { useRoomList } from "../../../hooks/use-room-list";
 import { useSectionUnread } from "../../../hooks/use-section-unread";
 import { useSpaceChildren } from "../../../hooks/use-space-children";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CreateDmDialog } from "../../dialogs/create-dm";
 import { CreateRoomDialog } from "../../dialogs/create-room";
 import { RoomRow } from "./room-row";
+import type { Scope } from "./scope";
 import { Section } from "./section";
 import { UnreadBadge } from "./unread-badge";
 
@@ -17,15 +19,18 @@ const ICON_BTN_CLS =
   "inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground";
 
 interface SidebarProps {
-  spaceId: string;
+  scope: Scope;
+  workforceSpaceId: string | null;
 }
 
-export function Sidebar({ spaceId }: SidebarProps) {
+export function Sidebar({ scope, workforceSpaceId }: SidebarProps) {
+  const spaceId = scope.kind === "space" ? scope.spaceId : "";
   const favorites = useFavoriteRooms();
   const dms = useDirectRooms();
   const spaceChildren = useSpaceChildren(spaceId);
+  const allRooms = useRoomList();
   const myPL = useMyPowerLevel(spaceId);
-  const canCreateRoom = myPL.canSendStateEvent("m.space.child");
+  const canCreateRoom = scope.kind === "space" && myPL.canSendStateEvent("m.space.child");
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [createDmOpen, setCreateDmOpen] = useState(false);
 
@@ -40,9 +45,11 @@ export function Sidebar({ spaceId }: SidebarProps) {
     }
     return out;
   };
+  const roomSource =
+    scope.kind === "space" ? spaceChildren : allRooms.filter((r) => !r.isSpaceRoom());
   const favList = claim(favorites);
   const dmList = claim(dms);
-  const roomList = claim(spaceChildren);
+  const roomList = claim(roomSource);
 
   const favUnread = useSectionUnread(favList);
   const dmUnread = useSectionUnread(dmList);
@@ -103,12 +110,20 @@ export function Sidebar({ spaceId }: SidebarProps) {
           ))}
         </Section>
       </div>
-      <CreateRoomDialog
-        open={createRoomOpen}
-        spaceId={spaceId}
-        onOpenChange={setCreateRoomOpen}
-      />
-      <CreateDmDialog open={createDmOpen} spaceId={spaceId} onOpenChange={setCreateDmOpen} />
+      {scope.kind === "space" ? (
+        <CreateRoomDialog
+          open={createRoomOpen}
+          spaceId={scope.spaceId}
+          onOpenChange={setCreateRoomOpen}
+        />
+      ) : null}
+      {workforceSpaceId ? (
+        <CreateDmDialog
+          open={createDmOpen}
+          spaceId={workforceSpaceId}
+          onOpenChange={setCreateDmOpen}
+        />
+      ) : null}
     </ScrollArea>
   );
 }

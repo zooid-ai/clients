@@ -1,16 +1,11 @@
 import { Sidebar } from "./sidebar/sidebar";
+import type { Scope } from "./sidebar/scope";
 
 interface LeftPanelProps {
-  spaceId: string | null;
+  scope: Scope;
+  workforceSpaceId: string | null;
 }
 
-export function LeftPanel({ spaceId }: LeftPanelProps) {
-  if (!spaceId) {
-    return (
-      <nav aria-label="Rooms" className="h-full p-4 text-xs text-muted-foreground">
-        Workforce unavailable.
-      </nav>
-    );
-  }
-  return <Sidebar spaceId={spaceId} />;
+export function LeftPanel({ scope, workforceSpaceId }: LeftPanelProps) {
+  return <Sidebar scope={scope} workforceSpaceId={workforceSpaceId} />;
 }
