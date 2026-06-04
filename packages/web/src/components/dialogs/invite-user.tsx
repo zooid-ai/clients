@@ -20,6 +20,22 @@ import { MatrixClientPeg } from "../../client/peg";
 import { useUserSearch } from "../../hooks/use-user-search";
 import { useWorkforce } from "../../hooks/use-workforce";
 
+/** Pull a human-readable message out of a matrix-js-sdk error. */
+function inviteErrorMessage(err: unknown): string {
+  const e = err as {
+    data?: { error?: string; errcode?: string };
+    errcode?: string;
+    message?: string;
+  };
+  // The server's own message is the most useful — e.g. "@bob:hs is banned from
+  // the room" for a banned user. Fall back to the JS error, then a generic line.
+  return (
+    e.data?.error ??
+    e.message ??
+    "Couldn't send the invite. Please try again."
+  );
+}
+
 interface InviteUserDialogProps {
   open: boolean;
   roomId: string;
@@ -36,6 +52,7 @@ export function InviteUserDialog({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { ready, isAgent } = useWorkforce(spaceId);
   const { results } = useUserSearch(query);
 
@@ -48,6 +65,7 @@ export function InviteUserDialog({
     setQuery("");
     setSelected(null);
     setSubmitting(false);
+    setError(null);
   };
 
   const onInvite = async () => {
@@ -55,12 +73,19 @@ export function InviteUserDialog({
     const client = MatrixClientPeg.safeGet();
     if (!client) return;
     setSubmitting(true);
+    setError(null);
     try {
       await (
         client as unknown as { invite: (r: string, u: string) => Promise<unknown> }
       ).invite(roomId, selected);
       onOpenChange(false);
       reset();
+    } catch (err) {
+      // The invite can be rejected by the server — most commonly when the
+      // target was banned (M_FORBIDDEN, "…is banned from the room"), but also
+      // for insufficient power level or a stale membership. Without surfacing
+      // this the dialog silently sits open and the action looks like a no-op.
+      setError(inviteErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +128,10 @@ export function InviteUserDialog({
                 <CommandItem
                   key={r.userId}
                   value={`${r.displayName ?? r.userId} ${r.userId}`}
-                  onSelect={() => setSelected(r.userId)}
+                  onSelect={() => {
+                    setSelected(r.userId);
+                    setError(null);
+                  }}
                   data-selected={selected === r.userId || undefined}
                 >
                   <span className="flex-1 truncate">
@@ -115,6 +143,14 @@ export function InviteUserDialog({
             </CommandGroup>
           </CommandList>
         </Command>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
+            {error}
+          </p>
+        )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

@@ -54,32 +54,38 @@ function setup(opts: {
 }
 
 describe("<MemberRow> moderation", () => {
-  it("shows kick + ban when I have the power level", () => {
+  it("shows kick + ban in the actions menu when I have the power level", async () => {
     setup({ myLevel: 100, targetLevel: 0 });
+    const user = userEvent.setup();
     render(<MemberRow roomId={roomId} userId="@bob:h.example" />);
-    expect(screen.getByRole("button", { name: /kick/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /ban/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /member actions/i }));
+    expect(screen.getByRole("menuitem", { name: /kick/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /ban/i })).toBeInTheDocument();
   });
 
-  it("hides kick + ban when my PL is below the threshold", () => {
+  it("hides the actions menu when my PL is below every threshold", () => {
     setup({ myLevel: 0, kick: 50, ban: 50 });
     render(<MemberRow roomId={roomId} userId="@bob:h.example" />);
-    expect(screen.queryByRole("button", { name: /kick/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /ban/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /member actions/i })).toBeNull();
   });
 
-  it("never shows kick/ban on my own row", () => {
+  it("never shows kick/ban on my own row", async () => {
     setup({ myLevel: 100 });
+    const user = userEvent.setup();
     render(<MemberRow roomId={roomId} userId={me} />);
-    expect(screen.queryByRole("button", { name: /kick/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /ban/i })).toBeNull();
+    // The self row may still expose a role control, but never moderation.
+    const menu = screen.queryByRole("button", { name: /member actions/i });
+    if (menu) await user.click(menu);
+    expect(screen.queryByRole("menuitem", { name: /kick/i })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /ban/i })).toBeNull();
   });
 
   it("confirms then calls client.kick with the reason", async () => {
     const { kick } = setup({ myLevel: 100, targetLevel: 0 });
     const user = userEvent.setup();
     render(<MemberRow roomId={roomId} userId="@bob:h.example" />);
-    await user.click(screen.getByRole("button", { name: /kick/i }));
+    await user.click(screen.getByRole("button", { name: /member actions/i }));
+    await user.click(screen.getByRole("menuitem", { name: /kick/i }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByRole("textbox"), "spam");
     await user.click(within(dialog).getByRole("button", { name: /^kick$/i }));

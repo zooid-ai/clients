@@ -91,6 +91,30 @@ describe("<InviteUserDialog>", () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
+  it("surfaces the server error and keeps the dialog open when invite is rejected", async () => {
+    // Re-inviting a banned (or otherwise rejected) user fails with M_FORBIDDEN.
+    const { invite } = setup({
+      searchResults: [{ user_id: "@bob:h.example", display_name: "Bob" }],
+    });
+    invite.mockRejectedValueOnce({
+      errcode: "M_FORBIDDEN",
+      data: { errcode: "M_FORBIDDEN", error: "@bob:h.example is banned from the room" },
+    });
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <InviteUserDialog open roomId={roomId} spaceId={spaceId} onOpenChange={onOpenChange} />,
+    );
+
+    await user.type(screen.getByPlaceholderText(/search users/i), "bob");
+    await user.click(await screen.findByText("Bob"));
+    await user.click(screen.getByRole("button", { name: /^invite$/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/banned from the room/i);
+    // The dialog must not close on failure, so the user can read the error.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
   it("disables Invite when nothing is selected", async () => {
     setup();
     render(
