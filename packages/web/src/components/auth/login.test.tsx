@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MatrixClientPeg } from "../../client/peg";
 import { mswServer } from "../../../test/setup";
 import { Login } from "./login";
@@ -17,6 +17,16 @@ const renderLogin = () =>
   );
 
 describe("<Login />", () => {
+  // <Login> probes POST /register to decide whether to show "Create account".
+  // Default it to "disabled" so tests that don't care about registration don't
+  // trip MSW's onUnhandledRequest: "error"; tests that do override this handler.
+  beforeEach(() =>
+    mswServer.use(
+      http.post(`${HS}/_matrix/client/v3/register`, () =>
+        HttpResponse.json({ errcode: "M_FORBIDDEN", error: "off" }, { status: 403 }),
+      ),
+    ),
+  );
   afterEach(() => MatrixClientPeg.reset());
 
   it("renders a password form when only m.login.password is advertised", async () => {
@@ -147,5 +157,41 @@ describe("<Login />", () => {
         value: originalLocation,
       });
     }
+  });
+
+  it("shows a Create account link when the homeserver allows registration", async () => {
+    mswServer.use(
+      http.get(`${HS}/_matrix/client/v3/login`, () =>
+        HttpResponse.json({ flows: [{ type: "m.login.password" }] }),
+      ),
+      http.post(`${HS}/_matrix/client/v3/register`, () =>
+        HttpResponse.json(
+          { session: "s1", flows: [{ stages: ["m.login.dummy"] }], params: {} },
+          { status: 401 },
+        ),
+      ),
+    );
+    renderLogin();
+    expect(await screen.findByRole("link", { name: /create account/i })).toHaveAttribute(
+      "href",
+      "/signup",
+    );
+  });
+
+  it("hides the Create account link on an SSO-only / no-registration server", async () => {
+    mswServer.use(
+      http.get(`${HS}/_matrix/client/v3/login`, () =>
+        HttpResponse.json({
+          flows: [{ type: "m.login.sso", identity_providers: [{ id: "z", name: "Zoon" }] }],
+        }),
+      ),
+      http.post(`${HS}/_matrix/client/v3/register`, () =>
+        HttpResponse.json({ errcode: "M_FORBIDDEN", error: "off" }, { status: 403 }),
+      ),
+    );
+    renderLogin();
+    // Give the probe a tick to resolve, then assert absence.
+    await screen.findByRole("button", { name: /sign in with zoon/i });
+    expect(screen.queryByRole("link", { name: /create account/i })).toBeNull();
   });
 });

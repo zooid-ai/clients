@@ -12,6 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MatrixClientPeg } from "./client/peg";
 import { AuthCallback } from "./components/auth/auth-callback";
 import { Login } from "./components/auth/login";
+import { Register } from "./components/auth/register";
 import { BrowseRoomsRoute } from "./components/structures/browse-rooms";
 import { EmptyRoom } from "./components/structures/empty-room";
 import { InvitesPage } from "./components/structures/invites-page";
@@ -123,6 +124,16 @@ function AppRoutes({ config }: { config: AppConfig }) {
               homeserverUrl={config.homeserverUrl}
               defaultIdpLabel={config.defaultIdpLabel ?? null}
             />
+          )
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          auth === "logged-in" ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Register homeserverUrl={config.homeserverUrl} />
           )
         }
       />

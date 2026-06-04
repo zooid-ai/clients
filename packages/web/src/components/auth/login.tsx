@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import {
   ssoRedirectUrl,
 } from "../../client/login";
 import { MatrixClientPeg } from "../../client/peg";
+import { registrationSupported } from "../../client/register";
 
 interface LoginProps {
   homeserverUrl: string;
@@ -21,12 +23,19 @@ export function Login({ homeserverUrl, defaultIdpLabel }: LoginProps) {
   const [flows, setFlows] = useState<LoginFlow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [canRegister, setCanRegister] = useState(false);
   const redirectedRef = useRef(false);
 
   useEffect(() => {
     fetchLoginFlows(homeserverUrl)
       .then(setFlows)
       .catch((e) => setError(String(e.message ?? e)));
+  }, [homeserverUrl]);
+
+  useEffect(() => {
+    registrationSupported(homeserverUrl)
+      .then((s) => setCanRegister(s.supported))
+      .catch(() => setCanRegister(false));
   }, [homeserverUrl]);
 
   // Opt-in (VITE_AUTO_REDIRECT_SINGLE_SSO): on an SSO-only homeserver with a
@@ -140,6 +149,14 @@ export function Login({ homeserverUrl, defaultIdpLabel }: LoginProps) {
               Sign in with {idp.name}
             </Button>
           ))}
+          {canRegister && (
+            <p className="text-muted-foreground text-sm">
+              No account?{" "}
+              <Link to="/signup" className="underline">
+                Create account
+              </Link>
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

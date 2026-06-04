@@ -77,7 +77,7 @@ function parseCredentials(homeserverUrl: string, json: unknown): Credentials {
   };
 }
 
-async function matrixError(res: Response): Promise<Error> {
+export async function matrixError(res: Response): Promise<Error> {
   try {
     const j = (await res.json()) as { error?: string; errcode?: string };
     return new Error(j.error ?? j.errcode ?? `HTTP ${res.status}`);
