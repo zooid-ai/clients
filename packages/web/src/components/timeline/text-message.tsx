@@ -1,15 +1,27 @@
+import { useState } from "react";
 import type { MatrixEvent } from "matrix-js-sdk";
 import { MessageSquare, TriangleAlertIcon } from "lucide-react";
 import { senderColor, splitMentions } from "@/lib/sender";
 import { UserAvatar } from "@/components/user-avatar";
+import { MatrixClientPeg } from "@/client/peg";
+import { useSyncExternalStore } from "react";
 import { usePresence } from "@/hooks/use-presence";
 import { useReactions } from "@/hooks/use-reactions";
 import { useThreadPreview } from "@/hooks/use-timeline";
 import { useUserName } from "@/hooks/use-user-name";
+import { useEditedContent } from "@/hooks/use-edited-content";
 import { EcoZoonEventType } from "@/events/eco-zoon";
 import { FormattedMessageBody } from "./formatted-message-body";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
+import { ReadReceiptsRow } from "./read-receipts-row";
+import {
+  EditButton,
+  DeleteButton,
+  DeleteConfirmDialog,
+  InlineEdit,
+  sendEditEvent,
+} from "./message-actions";
 
 function AvatarWithPresence({ userId }: { userId: string }) {
   const { presence } = usePresence(userId);
@@ -89,6 +101,11 @@ export function TextMessage({
   onViewThread,
   disableThreadAffordances,
 }: TextMessageProps) {
+  const client = useSyncExternalStore(
+    (cb) => MatrixClientPeg.subscribe(cb),
+    () => MatrixClientPeg.safeGet(),
+    () => null,
+  );
   const c = event.getContent() as {
     msgtype?: string;
     body?: string;
@@ -96,22 +113,64 @@ export function TextMessage({
     formatted_body?: string;
   };
   const sender = event.getSender() ?? "?";
-  const body = c.body ?? "";
   const eventId = event.getId() ?? "";
   const roomId = event.getRoomId() ?? "";
   const senderName = useUserName(sender, roomId);
+  const myUserId = client?.getUserId() ?? "";
+  const isMine = sender === myUserId;
+  const edited = useEditedContent(roomId, eventId);
+  const displayBody = edited?.body ?? c.body ?? "";
+  const displayFormattedBody =
+    typeof edited?.formatted_body === "string" ? edited.formatted_body : c.formatted_body;
   const hasFormatted =
-    c.format === "org.matrix.custom.html" &&
-    typeof c.formatted_body === "string" &&
-    c.formatted_body.length > 0;
+    (edited
+      ? c.format === "org.matrix.custom.html" && typeof displayFormattedBody === "string" && displayFormattedBody.length > 0
+      : c.format === "org.matrix.custom.html" && typeof c.formatted_body === "string" && c.formatted_body.length > 0);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // When disabled, pass an empty rootId so the hook short-circuits and returns no preview.
   const { events: threadEvents, totalCount } = useThreadPreview(
     roomId,
     disableThreadAffordances ? "" : eventId,
   );
   const reactions = useReactions(roomId, eventId);
   if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
+
+  // Tombstone for redacted messages
+  if (event.isRedacted()) {
+    return (
+      <div className="group relative flex gap-2 py-1.5 hover:bg-muted/30">
+        <div className="mt-0.5 shrink-0">
+          <AvatarWithPresence userId={sender} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <span
+            className="font-semibold text-sm leading-6"
+            style={{ color: senderColor(sender) }}
+            title={sender}
+          >
+            {senderName}
+          </span>
+          <p className="text-sm italic text-muted-foreground">Message deleted</p>
+        </div>
+      </div>
+    );
+  }
+
+  const room = client?.getRoom(roomId);
+  const canRedact =
+    isMine ||
+    (room?.currentState.maySendRedactionForEvent?.(event, myUserId) ?? false);
+
+  async function handleSaveEdit(value: string) {
+    if (client) await sendEditEvent(client, roomId, eventId, value);
+    setEditing(false);
+  }
+
+  async function handleConfirmDelete() {
+    await client?.redactEvent(roomId, eventId);
+    setConfirmDelete(false);
+  }
 
   return (
     <div className="group relative flex gap-2 py-1.5 hover:bg-muted/30">
@@ -126,21 +185,36 @@ export function TextMessage({
         >
           {senderName}
         </span>
-        {hasFormatted ? (
-          <FormattedMessageBody html={c.formatted_body!} roomId={roomId} />
+
+        {editing ? (
+          <InlineEdit
+            initialValue={displayBody}
+            onSave={handleSaveEdit}
+            onCancel={() => setEditing(false)}
+          />
         ) : (
-          <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
-            {splitMentions(body).map((seg, i) =>
-              seg.userId ? (
-                <MentionPill key={i} userId={seg.userId} roomId={roomId} />
-              ) : (
-                <span key={i}>{seg.text}</span>
-              ),
+          <>
+            {hasFormatted ? (
+              <FormattedMessageBody html={displayFormattedBody!} roomId={roomId} />
+            ) : (
+              <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
+                {splitMentions(displayBody).map((seg, i) =>
+                  seg.userId ? (
+                    <MentionPill key={i} userId={seg.userId} roomId={roomId} />
+                  ) : (
+                    <span key={i}>{seg.text}</span>
+                  ),
+                )}
+                {edited && (
+                  <span className="ml-1 text-xs text-muted-foreground">(edited)</span>
+                )}
+              </p>
             )}
-          </p>
+          </>
         )}
 
         <ReactionsRow roomId={roomId} eventId={eventId} reactions={reactions} />
+        <ReadReceiptsRow roomId={roomId} eventId={eventId} />
 
         {!disableThreadAffordances && totalCount > 0 && (
           <div className="mt-2 pl-3 border-l-2 border-muted-foreground/25 space-y-1">
@@ -184,8 +258,16 @@ export function TextMessage({
               <MessageSquare className="size-4" />
             </button>
           )}
+          {isMine && <EditButton onClick={() => setEditing(true)} />}
+          {canRedact && <DeleteButton onClick={() => setConfirmDelete(true)} />}
         </div>
       </div>
+
+      <DeleteConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

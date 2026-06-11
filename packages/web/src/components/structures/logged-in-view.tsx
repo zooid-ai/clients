@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProfileSettingsDialog } from "@/components/settings/profile-settings-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -41,6 +42,7 @@ export function LoggedInView() {
   const { spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
   const [scope, setScope] = useState<Scope | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const roomMatch = useMatch("/room/:roomId");
   const roomId = roomMatch?.params.roomId ?? null;
 
@@ -88,12 +90,17 @@ export function LoggedInView() {
                 {userId}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setProfileOpen(true)}>
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => MatrixClientPeg.reset()}>
                 Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
+        <ProfileSettingsDialog open={profileOpen} onOpenChange={setProfileOpen} />
         <main className="flex-1 min-h-0 overflow-hidden">
           <div className="flex h-full min-h-0">
             <div className="min-w-0 flex-1 overflow-hidden">
