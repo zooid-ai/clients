@@ -122,11 +122,16 @@ function snapshot(roomId: string): TimelineState {
   for (const ev of all) {
     const id = ev.getId();
     if (id) inSetIds.add(id);
-    const rel = ev.getContent()?.["m.relates_to"] as
-      | { rel_type?: string; event_id?: string }
-      | undefined;
+    // getRelation() reads getWireContent() — the original wire event — so it
+    // is correct even for replaced events (getContent() returns m.new_content
+    // which has no m.relates_to, causing edited threaded messages to leak into
+    // the main timeline).
+    const rel = ev.getRelation();
     if (rel?.rel_type === "m.thread") {
       if (rel.event_id) referencedRootIds.add(rel.event_id);
+    } else if (rel?.rel_type === "m.replace") {
+      // Edit events: suppress from the timeline; content applied to the
+      // original event via resolveEditedContent / useEditedContent.
     } else {
       events.push(ev);
     }
@@ -183,9 +188,7 @@ function snapshotThread(roomId: string, rootEventId: string): ThreadPreviewState
   const serverCount = unsigned?.["m.relations"]?.["m.thread"]?.count ?? 0;
 
   const threadEvents = all.filter((ev) => {
-    const rel = ev.getContent()?.["m.relates_to"] as
-      | { rel_type?: string; event_id?: string }
-      | undefined;
+    const rel = ev.getRelation();
     return rel?.rel_type === "m.thread" && rel.event_id === rootEventId;
   });
 
@@ -224,9 +227,7 @@ function snapshotThreadFull(roomId: string, rootEventId: string): ThreadFullStat
   const serverCount = unsigned?.["m.relations"]?.["m.thread"]?.count ?? 0;
 
   const threadEvents = all.filter((ev) => {
-    const rel = ev.getContent()?.["m.relates_to"] as
-      | { rel_type?: string; event_id?: string }
-      | undefined;
+    const rel = ev.getRelation();
     return rel?.rel_type === "m.thread" && rel.event_id === rootEventId;
   });
 

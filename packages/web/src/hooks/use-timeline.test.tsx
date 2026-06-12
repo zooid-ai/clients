@@ -80,6 +80,89 @@ describe("useTimeline", () => {
     expect(result.current.events).toEqual([]);
   });
 
+  it("filters out m.replace edit events from the main timeline", () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me });
+    const original = mkMatrixEvent({
+      eventId: "$m1",
+      roomId,
+      sender: me,
+      type: "m.room.message",
+      content: { msgtype: "m.text", body: "original" },
+    });
+    const edit = mkMatrixEvent({
+      eventId: "$e1",
+      roomId,
+      sender: me,
+      type: "m.room.message",
+      content: {
+        msgtype: "m.text",
+        body: "* edited",
+        "m.new_content": { msgtype: "m.text", body: "edited" },
+        "m.relates_to": { rel_type: "m.replace", event_id: "$m1" },
+      },
+    });
+    pushTimelineEvent(room, original);
+    pushTimelineEvent(room, edit);
+    (client as unknown as { getRoom: (id: string) => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    expect(result.current.events).toHaveLength(1);
+    expect(result.current.events[0].getId()).toBe("$m1");
+  });
+
+  it("keeps an edited threaded message in the thread after makeReplaced", () => {
+    // Regression: after makeReplaced(), getContent() returns m.new_content which
+    // has no m.relates_to, so the event leaked into the main timeline.
+    // getRelation() reads getWireContent() and is immune to this.
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me });
+    const root = mkMatrixEvent({
+      eventId: "$root",
+      roomId,
+      sender: "@a:h.example",
+      type: "m.room.message",
+      content: { msgtype: "m.text", body: "root" },
+    });
+    const threaded = mkMatrixEvent({
+      eventId: "$t1",
+      roomId,
+      sender: me,
+      type: "m.room.message",
+      content: {
+        msgtype: "m.text",
+        body: "thread reply",
+        "m.relates_to": { rel_type: "m.thread", event_id: "$root" },
+      },
+    });
+    const edit = mkMatrixEvent({
+      eventId: "$e1",
+      roomId,
+      sender: me,
+      type: "m.room.message",
+      content: {
+        msgtype: "m.text",
+        body: "* edited reply",
+        "m.new_content": { msgtype: "m.text", body: "edited reply" },
+        "m.relates_to": { rel_type: "m.replace", event_id: "$t1" },
+      },
+    });
+    // Simulate what matrix-js-sdk does when it processes the edit event.
+    threaded.makeReplaced(edit);
+
+    pushTimelineEvent(room, root);
+    pushTimelineEvent(room, threaded);
+    pushTimelineEvent(room, edit);
+    (client as unknown as { getRoom: (id: string) => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    // Root is in main timeline; threaded reply and edit event must not be.
+    expect(result.current.events).toHaveLength(1);
+    expect(result.current.events[0].getId()).toBe("$root");
+  });
+
   it("filters out thread reply events from the main timeline", () => {
     const client = makeFakeClient({ userId: me });
     const room = makeRoom(roomId, { client, myUserId: me });
