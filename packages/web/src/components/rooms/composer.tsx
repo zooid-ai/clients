@@ -1,11 +1,12 @@
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
-import { SendHorizontal } from "lucide-react";
+import { Paperclip, SendHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { displayNameOf, expandMentions, nameOfMember, senderColor } from "@/lib/sender";
 import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
 import { useThreadPreview } from "../../hooks/use-timeline";
+import { useMediaUpload, MAX_UPLOAD_BYTES } from "../../hooks/use-media-upload";
 
 const TEXTAREA_CLS =
   "field-sizing-content min-h-9 flex-1 bg-transparent px-2.5 py-2 text-base outline-none placeholder:text-muted-foreground resize-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
@@ -43,7 +44,10 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
   const [error, setError] = useState<string | null>(null);
   const [ac, setAc] = useState<AutocompleteState | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { upload, progress } = useMediaUpload();
 
   const threadScoped = Boolean(threadRootEventId);
   const threadId = threadRootEventId ?? null;
@@ -174,46 +178,86 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
 
   async function send(): Promise<void> {
     const body = value.trim();
-    if (!body) return;
+    if (!body && !attachment) return;
     setError(null);
     try {
-      const slash = parseSlashCommand(body, { threadScoped });
-      if (slash) {
-        // matrix-js-sdk auto-adds m.relates_to for m.room.message threaded
-        // sends, but not for custom event types (eco.zoon.*). Set the
-        // relation explicitly so the daemon can route by thread root.
-        const slashContent = threadId
-          ? {
-              ...slash.content,
-              "m.relates_to": { rel_type: "m.thread", event_id: threadId },
-            }
-          : slash.content;
+      // Slash commands only apply when there's no attachment and the body starts with /
+      if (body && !attachment) {
+        const slash = parseSlashCommand(body, { threadScoped });
+        if (slash) {
+          // matrix-js-sdk auto-adds m.relates_to for m.room.message threaded
+          // sends, but not for custom event types (eco.zoon.*). Set the
+          // relation explicitly so the daemon can route by thread root.
+          const slashContent = threadId
+            ? {
+                ...slash.content,
+                "m.relates_to": { rel_type: "m.thread", event_id: threadId },
+              }
+            : slash.content;
+          await (client.sendEvent as unknown as SendEvent).call(
+            client,
+            roomId,
+            threadId,
+            slash.eventType,
+            slashContent,
+          );
+          setValue("");
+          return;
+        }
+      }
+
+      // Send attachment first (before text), as per ZOD057 design
+      if (attachment) {
+        const { contentUri } = await upload(attachment);
+        const isImage = attachment.type.startsWith("image/");
+        const mediaContent: Record<string, unknown> = {
+          msgtype: isImage ? "m.image" : "m.file",
+          body: attachment.name,
+          url: contentUri,
+          info: { mimetype: attachment.type, size: attachment.size },
+        };
+        if (!isImage) mediaContent.filename = attachment.name;
         await (client.sendEvent as unknown as SendEvent).call(
           client,
           roomId,
           threadId,
-          slash.eventType,
-          slashContent,
+          "m.room.message",
+          mediaContent,
+        );
+        setAttachment(null);
+        if (attachInputRef.current) attachInputRef.current.value = "";
+      }
+
+      if (body) {
+        const { body: expandedBody, userIds: mentionUserIds } = expandMentions(body, members);
+        const content: Record<string, unknown> = { msgtype: "m.text", body: expandedBody };
+        if (mentionUserIds.length > 0) {
+          content["m.mentions"] = { user_ids: mentionUserIds };
+        }
+        await (client.sendEvent as unknown as SendEvent).call(
+          client,
+          roomId,
+          threadId,
+          "m.room.message",
+          content,
         );
         setValue("");
-        return;
       }
-      const { body: expandedBody, userIds: mentionUserIds } = expandMentions(body, members);
-      const content: Record<string, unknown> = { msgtype: "m.text", body: expandedBody };
-      if (mentionUserIds.length > 0) {
-        content["m.mentions"] = { user_ids: mentionUserIds };
-      }
-      await (client.sendEvent as unknown as SendEvent).call(
-        client,
-        roomId,
-        threadId,
-        "m.room.message",
-        content,
-      );
-      setValue("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function handleAttachChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("Attachments are limited to 0.5 MB");
+      e.target.value = "";
+      return;
+    }
+    setError(null);
+    setAttachment(file);
   }
 
   const onKeyDown = async (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -333,7 +377,45 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
               ))}
         </ul>
       )}
+      {attachment && (
+        <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1 text-sm">
+          <span className="truncate">{attachment.name}</span>
+          {progress > 0 && progress < 1 && (
+            <div
+              className="h-1 shrink-0 rounded-full bg-primary"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          )}
+          <button
+            type="button"
+            aria-label="Remove attachment"
+            onClick={() => {
+              setAttachment(null);
+              if (attachInputRef.current) attachInputRef.current.value = "";
+            }}
+            className="ml-auto shrink-0 rounded p-0.5 hover:bg-muted"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
       <div className={INPUT_WRAPPER_CLS}>
+        <input
+          ref={attachInputRef}
+          type="file"
+          aria-label="Attach file"
+          className="sr-only"
+          onChange={handleAttachChange}
+          tabIndex={-1}
+        />
+        <button
+          type="button"
+          aria-label="Attach file"
+          onClick={() => attachInputRef.current?.click()}
+          className="shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Paperclip className="h-4 w-4" />
+        </button>
         <textarea
           ref={textareaRef}
           data-slot="textarea"
@@ -363,7 +445,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
         <button
           type="button"
           onClick={() => void send()}
-          disabled={!value.trim()}
+          disabled={!value.trim() && !attachment}
           aria-label="Send message"
           className="shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >

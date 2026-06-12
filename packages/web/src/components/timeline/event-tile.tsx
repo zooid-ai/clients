@@ -4,7 +4,10 @@ import { decodeEcoZoonEvent, isEcoZoonLifecycle } from "../../events/eco-zoon";
 import { ApprovalCard } from "./approval-card";
 import { EcoZoonEventTile } from "./eco-zoon-event";
 import { ErrorTile } from "./error-tile";
+import { MediaMessage } from "./media-message";
 import { TextMessage } from "./text-message";
+
+const MEDIA_MSGTYPES = new Set(["m.image", "m.file", "m.video", "m.audio"]);
 
 export function EventTile({
   event,
@@ -17,7 +20,11 @@ export function EventTile({
   onViewThread?: (eventId: string) => void;
   disableThreadAffordances?: boolean;
 }) {
-  if (event.getType() === "m.room.message")
+  if (event.getType() === "m.room.message") {
+    const msgtype = (event.getContent() as { msgtype?: string }).msgtype;
+    if (msgtype && MEDIA_MSGTYPES.has(msgtype)) {
+      return <MediaMessage event={event} />;
+    }
     return (
       <TextMessage
         event={event}
@@ -26,6 +33,7 @@ export function EventTile({
         disableThreadAffordances={disableThreadAffordances}
       />
     );
+  }
   if (event.getType() === ApprovalEventType.Request) return <ApprovalCard event={event} />;
   // Approval *responses* are not rendered as their own tile — they only matter
   // as input to <ApprovalCard /> resolution. Skip silently.

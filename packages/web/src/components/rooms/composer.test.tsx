@@ -211,3 +211,98 @@ describe("<Composer /> /clear scope", () => {
     );
   });
 });
+
+describe("<Composer /> attachments", () => {
+  function setupWithUpload(opts: { uploadResult?: string } = {}) {
+    const send = vi.fn().mockResolvedValue({ event_id: "$m1" });
+    const uploadContent = vi
+      .fn()
+      .mockResolvedValue({ content_uri: opts.uploadResult ?? "mxc://hs/up1" });
+    const { client } = setup(send);
+    (client as unknown as { uploadContent: unknown }).uploadContent = uploadContent;
+    return { send, uploadContent };
+  }
+
+  function pngFile(bytes: number, name = "shot.png"): File {
+    return new File([new Uint8Array(bytes)], name, { type: "image/png" });
+  }
+
+  it("rejects files over 0.5 MB with an in-composer error and never uploads", async () => {
+    const { uploadContent, send } = setupWithUpload();
+    render(<Composer roomId={roomId} />);
+    const user = userEvent.setup();
+    const input = screen.getByLabelText(/attach file/i, { selector: "input" }) as HTMLInputElement;
+    await user.upload(input, pngFile(524_289));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/0\.5\s?MB/i),
+    );
+    expect(uploadContent).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("stages a valid file, then on send uploads and sends m.image before the text event", async () => {
+    const { uploadContent, send } = setupWithUpload();
+    render(<Composer roomId={roomId} />);
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/attach file/i, { selector: "input" }), pngFile(1024, "dog.png"));
+    expect(screen.getByText("dog.png")).toBeDefined(); // staged chip
+
+    await user.type(screen.getByRole("textbox", { name: /message/i }), "look{Enter}");
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(uploadContent).toHaveBeenCalledOnce();
+    const [, , firstType, firstContent] = send.mock.calls[0] as [
+      string,
+      string | null,
+      string,
+      Record<string, unknown>,
+    ];
+    expect(firstType).toBe("m.room.message");
+    expect(firstContent).toMatchObject({
+      msgtype: "m.image",
+      body: "dog.png",
+      url: "mxc://hs/up1",
+      info: { mimetype: "image/png", size: 1024 },
+    });
+    const [, , , secondContent] = send.mock.calls[1] as [
+      string,
+      string | null,
+      string,
+      Record<string, unknown>,
+    ];
+    expect(secondContent).toMatchObject({ msgtype: "m.text", body: "look" });
+  });
+
+  it("sends a staged attachment even with no text typed", async () => {
+    const { send } = setupWithUpload();
+    render(<Composer roomId={roomId} />);
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/attach file/i, { selector: "input" }), pngFile(1024, "dog.png"));
+    await user.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect((send.mock.calls[0] as [unknown, unknown, unknown, Record<string, unknown>])[3]).toMatchObject({
+      msgtype: "m.image",
+    });
+  });
+
+  it("sends non-image files as m.file", async () => {
+    const { send } = setupWithUpload();
+    render(<Composer roomId={roomId} />);
+    const user = userEvent.setup();
+    const pdf = new File([new Uint8Array(2048)], "report.pdf", {
+      type: "application/pdf",
+    });
+    await user.upload(screen.getByLabelText(/attach file/i, { selector: "input" }), pdf);
+    await user.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() =>
+      expect(
+        (send.mock.calls[0] as [unknown, unknown, unknown, Record<string, unknown>])[3],
+      ).toMatchObject({
+        msgtype: "m.file",
+        body: "report.pdf",
+        filename: "report.pdf",
+        info: { mimetype: "application/pdf", size: 2048 },
+      }),
+    );
+  });
+});

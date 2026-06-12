@@ -8,6 +8,14 @@ const AS_TOKEN =
   process.env.MATRIX_AS_TOKEN ?? "as-zoon-test-fixed-token-do-not-use-in-prod";
 const AS_NAMESPACE_PREFIX = process.env.MATRIX_AS_NAMESPACE_PREFIX ?? "_zoon_test_";
 
+export interface MatrixRoomEvent {
+  event_id: string;
+  type: string;
+  sender: string;
+  content: unknown;
+  origin_server_ts: number;
+}
+
 export interface DaemonImpersonator {
   agentClient: MatrixClient;
   agentUserId: string;
@@ -21,6 +29,13 @@ export interface DaemonImpersonator {
     approvalId: string,
     timeoutMs?: number,
   ): Promise<{ decision: string; sender: string }>;
+  waitForMessage(
+    roomId: string,
+    predicate: (e: MatrixRoomEvent) => boolean,
+    timeoutMs?: number,
+  ): Promise<MatrixRoomEvent>;
+  downloadMedia(mxcUri: string): Promise<Buffer>;
+  sendText(roomId: string, body: string): Promise<void>;
 }
 
 export interface FreshHuman {
@@ -133,6 +148,47 @@ export const test = base.extend<{ daemon: DaemonImpersonator; human: FreshHuman 
         throw new Error(
           `Timed out waiting for approval_response with approval_id=${approvalId}`,
         );
+      },
+
+      async waitForMessage(roomId, predicate, timeoutMs = 30_000) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const r = await fetch(
+            `${HS_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=50`,
+            { headers: { Authorization: `Bearer ${AS_TOKEN}`, "Content-Type": "application/json" } },
+          );
+          const j = (await r.json()) as { chunk: MatrixRoomEvent[] };
+          const found = j.chunk.find(predicate);
+          if (found) return found;
+          await new Promise((res) => setTimeout(res, 500));
+        }
+        throw new Error(`waitForMessage timed out after ${timeoutMs}ms in ${roomId}`);
+      },
+
+      async downloadMedia(mxcUri) {
+        const m = /^mxc:\/\/([^/]+)\/(.+)$/.exec(mxcUri);
+        if (!m) throw new Error(`not an mxc uri: ${mxcUri}`);
+        const [, serverName, mediaId] = m;
+        const url =
+          `${HS_URL}/_matrix/client/v1/media/download/` +
+          `${encodeURIComponent(serverName)}/${encodeURIComponent(mediaId)}` +
+          `?user_id=${encodeURIComponent(agentUserId)}`;
+        const r = await fetch(url, {
+          headers: { Authorization: `Bearer ${AS_TOKEN}` },
+        });
+        if (!r.ok) throw new Error(`media download failed: ${r.status}`);
+        return Buffer.from(await r.arrayBuffer());
+      },
+
+      async sendText(roomId, body) {
+        await (agentClient.sendEvent as (
+          roomId: string,
+          type: string,
+          content: Record<string, unknown>,
+        ) => Promise<{ event_id: string }>)(roomId, "m.room.message", {
+          msgtype: "m.text",
+          body,
+        });
       },
     };
 
