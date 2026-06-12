@@ -60,7 +60,7 @@ export function ProfileSection({ onSaved }: { onSaved: () => void }) {
           />
         </div>
       </div>
-      <DialogFooter>
+      <DialogFooter className="mt-4">
         <Button onClick={save} disabled={saving} aria-busy={saving}>
           Save
         </Button>
