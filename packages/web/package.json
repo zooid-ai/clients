@@ -1,8 +1,9 @@
 {
   "name": "@zooid/zoon-web",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "publishConfig": { "access": "public" },
   "scripts": {
     "dev": "vite",
