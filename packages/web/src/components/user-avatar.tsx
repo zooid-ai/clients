@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { UserEvent } from "matrix-js-sdk";
 import { createAvatar } from "@dicebear/core";
 import { glass } from "@dicebear/collection";
@@ -40,7 +40,11 @@ function useUserAvatarUrl(userId: string): string | null {
       const client = MatrixClientPeg.safeGet();
       const user = client?.getUser(userId);
       if (!user?.avatarUrl) return null;
-      return client?.mxcUrlToHttp(user.avatarUrl, 64, 64, "crop") ?? null;
+      // getHttpUriForMxc returns "" (not null) for an empty/invalid mxc URL.
+      // Normalise to null with `||` so callers fall back cleanly — `?? null`
+      // would leak the empty string and render <img src=""> (Chrome shows its
+      // broken-image icon).
+      return client?.mxcUrlToHttp(user.avatarUrl, 64, 64, "crop") || null;
     },
     () => null,
   );
@@ -55,8 +59,17 @@ interface UserAvatarProps {
 
 export function UserAvatar({ userId, size = "default", presence, className }: UserAvatarProps) {
   const mxcSrc = useUserAvatarUrl(userId);
-  const fallbackSrc = createAvatar(glass, { seed: avatarSeed(userId) }).toDataUri();
-  const src = mxcSrc ?? fallbackSrc;
+  const fallbackSrc = useMemo(
+    () => createAvatar(glass, { seed: avatarSeed(userId) }).toDataUri(),
+    [userId],
+  );
+  // Degrade to the generated avatar if the mxc thumbnail itself fails to load
+  // (e.g. 404 on authenticated media). Reset when the source changes so a newly
+  // uploaded avatar gets a fresh attempt.
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [mxcSrc]);
+  // `||`, not `??`: an empty-string mxcSrc must also fall through to fallback.
+  const src = !failed && mxcSrc ? mxcSrc : fallbackSrc;
   // xs is not a data-size on Avatar — apply it via className instead
   const avatarSize = size === "xs" ? "sm" : size;
   return (
@@ -64,7 +77,14 @@ export function UserAvatar({ userId, size = "default", presence, className }: Us
       size={avatarSize}
       className={cn(size === "xs" && "!size-4", className)}
     >
-      <img src={src} alt={userId} className="aspect-square size-full rounded-full object-cover" />
+      <img
+        src={src}
+        alt={userId}
+        onError={() => {
+          if (!failed && mxcSrc) setFailed(true);
+        }}
+        className="aspect-square size-full rounded-full object-cover"
+      />
       {presence !== undefined && (
         <AvatarBadge
           data-presence={presence}
