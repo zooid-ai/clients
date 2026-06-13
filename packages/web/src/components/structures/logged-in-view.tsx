@@ -14,6 +14,7 @@ import { useNotifications } from "@/hooks/use-notifications";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
@@ -71,25 +72,21 @@ export function LoggedInView() {
         <SidebarContent>
           <LeftPanel scope={activeScope} workforceSpaceId={spaceId} />
         </SidebarContent>
-      </Sidebar>
-      <SidebarInset data-testid="logged-in-view">
-        <header className="flex items-center justify-between border-b border-border px-4 h-12">
-          <div className="flex items-center gap-2 min-w-0">
-            <SidebarTrigger aria-label="Toggle sidebar" />
-            <RoomHeader
-              membersOpen={rightPanel === "people"}
-              onToggleMembers={() => openPanel("people")}
-              onOpenInfo={() => openPanel("home")}
-              onOpenMore={() => openPanel("home")}
-            />
-          </div>
+        <SidebarFooter className="border-t border-sidebar-border p-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="User menu" className="shrink-0">
-                <UserAvatar userId={userId} size="sm" />
+              <Button
+                variant="ghost"
+                aria-label="User menu"
+                className="h-9 w-full justify-start gap-2 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+              >
+                <UserAvatar userId={userId} size="sm" className="shrink-0" />
+                <span className="truncate text-sm font-medium group-data-[collapsible=icon]:hidden">
+                  {myName}
+                </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent side="top" align="start" className="w-48">
               <DropdownMenuItem disabled className="font-medium">
                 {myName}
               </DropdownMenuItem>
@@ -106,6 +103,19 @@ export function LoggedInView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset data-testid="logged-in-view">
+        <header className="flex h-12 items-center gap-2 border-b border-border px-3">
+          <SidebarTrigger aria-label="Toggle sidebar" />
+          <div className="flex flex-1 min-w-0 items-center">
+            <RoomHeader
+              membersOpen={rightPanel === "people"}
+              onToggleMembers={() => openPanel("people")}
+              onOpenInfo={() => openPanel("home")}
+              onOpenMore={() => openPanel("home")}
+            />
+          </div>
         </header>
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         <main className="flex-1 min-h-0 overflow-hidden">

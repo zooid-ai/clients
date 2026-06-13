@@ -4,6 +4,7 @@ import { ArrowLeft, Bell, Globe, Lock, LogOut, Pencil, Star, Users, X } from "lu
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { MatrixClientPeg } from "../../client/peg";
 import { useJoinRule } from "../../hooks/use-join-rule";
@@ -28,6 +29,12 @@ interface RoomPanelProps {
   onNavigate: (view: "home" | "people" | "notifications") => void;
   onClose: () => void;
 }
+
+// Rows sit inside a p-1 container (like the sidebar user-menu footer), so each row
+// has 4px breathing room from the separator and panel edges. Content padding is px-3
+// so icon lands at 4+12=16px from the panel edge, same as before.
+const ROW = "flex h-8 w-full items-center gap-2.5 px-3 text-sm";
+const ACTION_ROW = `${ROW} cursor-pointer rounded-md transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`;
 
 function HomeView({ roomId, onNavigate, onClose }: Omit<RoomPanelProps, "view" | "spaceId">) {
   const navigate = useNavigate();
@@ -80,8 +87,9 @@ function HomeView({ roomId, onNavigate, onClose }: Omit<RoomPanelProps, "view" |
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="flex items-start gap-3">
+    <div className="flex flex-col">
+      {/* Avatar + name — uses p-4 block padding, not ROW */}
+      <div className="flex items-start gap-3 p-4">
         {canEdit ? (
           <label aria-label="Room avatar" className="cursor-pointer">
             <RoomAvatar roomId={roomId} name={roomName} size="lg" />
@@ -96,7 +104,7 @@ function HomeView({ roomId, onNavigate, onClose }: Omit<RoomPanelProps, "view" |
         ) : (
           <RoomAvatar roomId={roomId} name={roomName} size="lg" />
         )}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pt-0.5">
           {editingName ? (
             <div className="flex items-center gap-1">
               <Input
@@ -128,20 +136,22 @@ function HomeView({ roomId, onNavigate, onClose }: Omit<RoomPanelProps, "view" |
         </div>
       </div>
 
-      <div className="space-y-1 text-sm">
-        <div className="flex items-center gap-2 text-muted-foreground">
+      {/* Info rows — each row has its own px-4 so icons land at the panel edge */}
+      <div className="p-1">
+        <div className={`${ROW} text-muted-foreground`}>
           <RuleIcon className="size-4 shrink-0" />
           <span>{ruleText}{rule === "restricted" && spaceName ? ` · ${spaceName}` : ""}</span>
         </div>
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <div className={`${ROW} text-muted-foreground`}>
           <Users className="size-4 shrink-0" />
           <span>{memberCount} members</span>
         </div>
       </div>
 
-      <div>
+      {/* Topic */}
+      <div className="p-1">
         {editingTopic ? (
-          <div className="space-y-2">
+          <div className="space-y-2 px-3 pb-2">
             <Label htmlFor="topic-input">Topic</Label>
             <Textarea
               id="topic-input"
@@ -157,62 +167,64 @@ function HomeView({ roomId, onNavigate, onClose }: Omit<RoomPanelProps, "view" |
             </div>
           </div>
         ) : (
-          <div className="flex items-start gap-1">
-            {topic && <p className="flex-1 text-sm text-muted-foreground">{topic}</p>}
+          <>
+            {topic && <p className="px-3 pb-1 text-sm text-muted-foreground">{topic}</p>}
             {canEdit && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 aria-label="Edit topic"
-                className="shrink-0"
+                className={`${ACTION_ROW} text-muted-foreground`}
                 onClick={() => { setTopicValue(topic ?? ""); setEditingTopic(true); }}
               >
-                <Pencil className="size-3" />
+                <Pencil className="size-4 shrink-0" />
                 Edit topic
-              </Button>
+              </button>
             )}
-          </div>
+          </>
         )}
       </div>
 
-      <Button
-        variant="ghost"
-        className="w-full justify-start gap-2"
-        onClick={() => void toggleFavorite()}
-      >
-        <Star className={`size-4 ${isFavorite ? "fill-current text-amber-500" : ""}`} />
-        {isFavorite ? "Remove from Favourites" : "Add to Favourites"}
-      </Button>
+      <Separator />
 
-      <div className="space-y-1 border-t border-border pt-2">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2"
+      {/* Action rows — raw <button> so padding is never overridden by a variant */}
+      <div className="p-1">
+        <button
+          type="button"
+          className={ACTION_ROW}
+          onClick={() => void toggleFavorite()}
+        >
+          <Star className={`size-4 shrink-0 ${isFavorite ? "fill-current text-amber-500" : ""}`} />
+          {isFavorite ? "Remove from Favourites" : "Add to Favourites"}
+        </button>
+        <button
+          type="button"
+          className={ACTION_ROW}
           onClick={() => onNavigate("people")}
         >
-          <Users className="size-4" />
+          <Users className="size-4 shrink-0" />
           People
-        </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2"
+        </button>
+        <button
+          type="button"
+          className={ACTION_ROW}
           onClick={() => onNavigate("notifications")}
         >
-          <Bell className="size-4" />
+          <Bell className="size-4 shrink-0" />
           Notifications
-        </Button>
+        </button>
       </div>
 
-      <div className="border-t border-border pt-2">
-        <Button
-          variant="destructive"
-          size="sm"
-          className="gap-1"
+      <Separator />
+
+      <div className="p-1">
+        <button
+          type="button"
+          className={`${ACTION_ROW} text-destructive hover:bg-destructive/10 hover:text-destructive`}
           onClick={() => void onLeave()}
         >
-          <LogOut className="size-4" />
+          <LogOut className="size-4 shrink-0" />
           Leave room
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -222,29 +234,32 @@ function NotificationsView({ roomId, onNavigate }: { roomId: string; onNavigate:
   const { state, setState } = useRoomNotifState(roomId);
 
   return (
-    <div className="p-4">
-      <div className="mb-4 flex items-center gap-2">
+    <div className="flex flex-col">
+      <div className="flex h-10 items-center gap-1 px-2">
         <Button variant="ghost" size="icon" aria-label="Back" onClick={() => onNavigate("home")}>
           <ArrowLeft className="size-4" />
         </Button>
-        <h2 className="font-semibold">Notifications</h2>
+        <h2 className="text-sm font-semibold">Notifications</h2>
       </div>
-      <fieldset className="space-y-2">
-        <legend className="sr-only">Notification setting</legend>
-        {(["all", "mentions", "mute"] as RoomNotifState[]).map((value) => (
-          <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="notif"
-              value={value}
-              checked={state === value}
-              onChange={() => void setState(value)}
-              aria-label={value === "all" ? "All messages" : value === "mentions" ? "Mentions & keywords" : "Mute"}
-            />
-            {value === "all" ? "All messages" : value === "mentions" ? "Mentions & keywords" : "Mute"}
-          </label>
-        ))}
-      </fieldset>
+      <Separator />
+      <div className="px-4 py-3">
+        <fieldset className="space-y-1">
+          <legend className="sr-only">Notification setting</legend>
+          {(["all", "mentions", "mute"] as RoomNotifState[]).map((value) => (
+            <label key={value} className="flex h-8 cursor-pointer items-center gap-2.5 text-sm">
+              <input
+                type="radio"
+                name="notif"
+                value={value}
+                checked={state === value}
+                onChange={() => void setState(value)}
+                aria-label={value === "all" ? "All messages" : value === "mentions" ? "Mentions & keywords" : "Mute"}
+              />
+              {value === "all" ? "All messages" : value === "mentions" ? "Mentions & keywords" : "Mute"}
+            </label>
+          ))}
+        </fieldset>
+      </div>
     </div>
   );
 }
@@ -260,12 +275,13 @@ function PeopleView({
 }) {
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-2 p-4 pb-2">
+      <div className="flex h-10 items-center gap-1 px-2">
         <Button variant="ghost" size="icon" aria-label="Back" onClick={() => onNavigate("home")}>
           <ArrowLeft className="size-4" />
         </Button>
-        <h2 className="font-semibold">People</h2>
+        <h2 className="text-sm font-semibold">People</h2>
       </div>
+      <Separator />
       <MemberPanel roomId={roomId} spaceId={spaceId} />
     </div>
   );
@@ -274,10 +290,8 @@ function PeopleView({
 export function RoomPanel({ roomId, spaceId, view, onNavigate, onClose }: RoomPanelProps) {
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-l border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-sm font-medium">
-          {view === "home" ? "Room info" : view === "people" ? "People" : "Notifications"}
-        </span>
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+        <span className="text-sm font-semibold">Room info</span>
         <Button variant="ghost" size="icon" aria-label="Close panel" onClick={onClose}>
           <X className="size-4" />
         </Button>

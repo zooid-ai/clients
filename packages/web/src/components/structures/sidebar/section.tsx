@@ -25,7 +25,7 @@ export function Section({ title, action, children, defaultExpanded = true }: Sec
         </button>
         <div className="ml-auto">{action}</div>
       </header>
-      {expanded && <div>{children}</div>}
+      {expanded && <div className="p-1">{children}</div>}
     </section>
   );
 }
