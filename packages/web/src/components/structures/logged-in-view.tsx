@@ -24,8 +24,8 @@ import { useActiveSpaceId } from "../../hooks/use-active-space-id";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useUserName } from "../../hooks/use-user-name";
 import { LeftPanel } from "./left-panel";
-import { MemberPanel } from "./member-panel";
 import { RoomHeader } from "./room-header";
+import { RoomPanel } from "./room-panel";
 import type { Scope } from "./sidebar/scope";
 import { SpaceSwitcher } from "./sidebar/space-switcher";
 
@@ -42,7 +42,7 @@ export function LoggedInView() {
     (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
   const { spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
   const [scope, setScope] = useState<Scope | null>(null);
-  const [membersOpen, setMembersOpen] = useState(false);
+  const [rightPanel, setRightPanel] = useState<"home" | "people" | "notifications" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   useNotifications();
   const roomMatch = useMatch("/room/:roomId");
@@ -53,11 +53,14 @@ export function LoggedInView() {
   }, [client]);
 
   useEffect(() => {
-    if (scope) return; // user has chosen; don't override
+    if (scope) return;
     if (spaceId) setScope({ kind: "space", spaceId });
   }, [spaceId, scope]);
 
   const activeScope: Scope = scope ?? (spaceId ? { kind: "space", spaceId } : { kind: "home" });
+
+  const openPanel = (view: "home" | "people" | "notifications") =>
+    setRightPanel((p) => (p === view ? null : view));
 
   return (
     <SidebarProvider className="h-svh overflow-hidden">
@@ -74,8 +77,10 @@ export function LoggedInView() {
           <div className="flex items-center gap-2 min-w-0">
             <SidebarTrigger aria-label="Toggle sidebar" />
             <RoomHeader
-              membersOpen={membersOpen}
-              onToggleMembers={() => setMembersOpen((v) => !v)}
+              membersOpen={rightPanel === "people"}
+              onToggleMembers={() => openPanel("people")}
+              onOpenInfo={() => openPanel("home")}
+              onOpenMore={() => openPanel("home")}
             />
           </div>
           <DropdownMenu>
@@ -108,7 +113,15 @@ export function LoggedInView() {
             <div className="min-w-0 flex-1 overflow-hidden">
               <Outlet context={{ spaceId } satisfies LoggedInOutletContext} />
             </div>
-            {membersOpen && roomId && <MemberPanel roomId={roomId} spaceId={spaceId} />}
+            {roomId && rightPanel && (
+              <RoomPanel
+                roomId={roomId}
+                spaceId={spaceId}
+                view={rightPanel}
+                onNavigate={setRightPanel}
+                onClose={() => setRightPanel(null)}
+              />
+            )}
           </div>
         </main>
       </SidebarInset>

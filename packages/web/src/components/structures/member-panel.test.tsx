@@ -75,24 +75,23 @@ describe("<MemberPanel> invite affordance", () => {
   });
 });
 
-describe("<MemberPanel> pending tab", () => {
-  it("shows Members and Pending tabs; Pending lists invitees with Cancel invite", async () => {
+describe("<MemberPanel> pending invites as section", () => {
+  it("shows pending invites as a section, not a nested tab strip", async () => {
     const { kick } = setupWithPending({ [me]: 100 }, [{ userId: "@bob:h.example", name: "bob" }]);
     const user = userEvent.setup();
     render(<MemberPanel roomId={roomId} spaceId="!space:h.example" />);
 
-    // Members tab is default and shows joined roles.
-    expect(screen.getByRole("tab", { name: /members/i })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: /pending/i }));
+    expect(screen.getByText(/invited · 1/i)).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.getByText("bob")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /cancel invite/i }));
     expect(kick).toHaveBeenCalledWith(roomId, "@bob:h.example");
   });
 
-  it("omits the Pending tab when there are no pending invites", () => {
+  it("omits the Invited section when there are no pending invites", () => {
     setupWithPending({ [me]: 100 }, []);
     render(<MemberPanel roomId={roomId} spaceId="!space:h.example" />);
-    expect(screen.queryByRole("tab", { name: /pending/i })).toBeNull();
+    expect(screen.queryByText(/invited/i)).toBeNull();
   });
 });
 

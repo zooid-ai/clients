@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConditionKind, PushRuleActionName } from "matrix-js-sdk";
@@ -35,21 +34,7 @@ function renderHeader() {
   );
 }
 
-describe("room header notifications submenu", () => {
-  it("sets the room to mentions-only from the submenu", async () => {
-    const client = setupClient();
-    const user = userEvent.setup();
-    renderHeader();
-    await user.click(screen.getByRole("button", { name: /room actions/i }));
-    const sub = await screen.findByText(/^notifications$/i);
-    // Radix submenus open on keyboard navigation, not click, under happy-dom
-    sub.focus();
-    await user.keyboard("{ArrowRight}");
-    const mentionsItem = await screen.findByText(/mentions & keywords/i);
-    await user.click(mentionsItem);
-    expect(client.setRoomMutePushRule).toHaveBeenCalledWith("global", roomId, true);
-  });
-
+describe("room header notifications", () => {
   it("shows a muted indicator when the room is muted", () => {
     const client = setupClient();
     (client as unknown as Record<string, unknown>).pushRules = {

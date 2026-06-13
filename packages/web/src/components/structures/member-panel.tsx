@@ -5,7 +5,6 @@ import { groupMembersByRole, useMemberRoles } from "../../hooks/use-member-roles
 import { useMyPowerLevel } from "../../hooks/use-my-power-level";
 import { usePendingRoomInvites } from "../../hooks/use-pending-room-invites";
 import { InviteUserDialog } from "../dialogs/invite-user";
-import { Tabs } from "../ui/tabs";
 import { MemberRow } from "./member-row";
 
 interface MemberPanelProps {
@@ -18,7 +17,6 @@ export function MemberPanel({ roomId, spaceId }: MemberPanelProps) {
   const pending = usePendingRoomInvites(roomId);
   const myPL = useMyPowerLevel(roomId);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [tab, setTab] = useState<"members" | "pending">("members");
 
   const room = MatrixClientPeg.safeGet()?.getRoom(roomId);
   const invitePL =
@@ -47,44 +45,33 @@ export function MemberPanel({ roomId, spaceId }: MemberPanelProps) {
     </div>
   );
 
-  const pendingList = (
-    <ul className="space-y-1">
-      {pending.map((m) => (
-        <li key={m.userId} className="flex items-center gap-2 py-0.5">
-          <MemberRow roomId={roomId} userId={m.userId} membership="invite" />
-        </li>
-      ))}
-    </ul>
-  );
-
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-l border-border bg-background">
-      <div className="flex-1 overflow-y-auto p-4">
-        {canInvite && spaceId && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mb-3 w-full"
-            onClick={() => setInviteOpen(true)}
-          >
-            Invite
-          </Button>
-        )}
-        {hasPending ? (
-          <Tabs
-            value={tab}
-            onValueChange={(v) => setTab(v as "members" | "pending")}
-            tabs={[
-              { value: "members", label: "Members" },
-              { value: "pending", label: `Pending · ${pending.length}` },
-            ]}
-          >
-            {tab === "members" ? membersList : pendingList}
-          </Tabs>
-        ) : (
-          membersList
-        )}
-      </div>
+    <div className="flex-1 overflow-y-auto p-4">
+      {canInvite && spaceId && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mb-3 w-full"
+          onClick={() => setInviteOpen(true)}
+        >
+          Invite
+        </Button>
+      )}
+      {hasPending && (
+        <section className="mb-4">
+          <h3 className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+            Invited · {pending.length}
+          </h3>
+          <ul className="space-y-1">
+            {pending.map((m) => (
+              <li key={m.userId} className="flex items-center gap-2 py-0.5">
+                <MemberRow roomId={roomId} userId={m.userId} membership="invite" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {membersList}
       {spaceId && (
         <InviteUserDialog
           open={inviteOpen}
@@ -93,6 +80,6 @@ export function MemberPanel({ roomId, spaceId }: MemberPanelProps) {
           onOpenChange={setInviteOpen}
         />
       )}
-    </aside>
+    </div>
   );
 }

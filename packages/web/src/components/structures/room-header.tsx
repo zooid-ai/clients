@@ -1,19 +1,7 @@
-import { BellOff, ChevronDown, Globe, Lock, Star, Users } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { BellOff, Ellipsis, Globe, Lock, Star, Users } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import { useMatch } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -23,12 +11,8 @@ import {
 import { MatrixClientPeg } from "../../client/peg";
 import { useJoinRule } from "../../hooks/use-join-rule";
 import { useMemberRoles } from "../../hooks/use-member-roles";
-import { useMyPowerLevel } from "../../hooks/use-my-power-level";
 import { useRoomFavorite } from "../../hooks/use-room-favorite";
 import { useRoomNotifState } from "../../hooks/use-room-notif-state";
-import type { RoomNotifState } from "../../lib/matrix/notification-prefs";
-import { RenameRoomDialog } from "../dialogs/rename-room";
-import { RoomInfoDialog } from "../dialogs/room-info";
 
 const JOIN_RULE_INDICATOR = {
   invite: { Icon: Lock, label: "Invite only" },
@@ -39,9 +23,11 @@ const JOIN_RULE_INDICATOR = {
 interface RoomHeaderProps {
   membersOpen?: boolean;
   onToggleMembers?: () => void;
+  onOpenInfo?: () => void;
+  onOpenMore?: () => void;
 }
 
-export function RoomHeader({ membersOpen, onToggleMembers }: RoomHeaderProps) {
+export function RoomHeader({ membersOpen, onToggleMembers, onOpenInfo, onOpenMore }: RoomHeaderProps) {
   const match = useMatch("/room/:roomId");
   const roomId = match?.params.roomId;
   const client = useSyncExternalStore(
@@ -50,60 +36,37 @@ export function RoomHeader({ membersOpen, onToggleMembers }: RoomHeaderProps) {
     () => null,
   );
   const members = useMemberRoles(roomId ?? "");
-  const myPL = useMyPowerLevel(roomId ?? "");
   const { isFavorite, toggle: toggleFavorite } = useRoomFavorite(roomId ?? "");
   const { rule } = useJoinRule(roomId ?? "");
-  const { state: notifState, setState: setNotifState } = useRoomNotifState(roomId ?? "");
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const { state: notifState } = useRoomNotifState(roomId ?? "");
 
   if (!roomId || !client) return null;
 
   const room = client.getRoom(roomId);
   const roomName = room?.name ?? roomId;
-  const canRename = myPL.canSendStateEvent("m.room.name");
   const { Icon: RuleIcon, label: ruleLabel } = JOIN_RULE_INDICATOR[rule];
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Room actions"
-            className="h-7 max-w-48 gap-1 truncate px-1.5 text-sm font-medium"
-          >
-            <span className="truncate">{roomName}</span>
-            <ChevronDown className="size-3.5 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onSelect={() => setInfoOpen(true)}>Room Info</DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Notifications</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuRadioGroup
-                value={notifState}
-                onValueChange={(v) => void setNotifState(v as RoomNotifState)}
-              >
-                <DropdownMenuRadioItem value="all">All messages</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="mentions">
-                  Mentions &amp; keywords
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="mute">Mute</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          {canRename && (
-            <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
-              Rename room
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => setInfoOpen(true)}>Leave room</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        onClick={() => void toggleFavorite()}
+        className="size-6 text-muted-foreground hover:text-foreground"
+      >
+        <Star
+          className={`size-3.5 ${isFavorite ? "fill-current text-amber-500" : ""}`}
+        />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 max-w-48 truncate px-1.5 text-sm font-medium"
+        onClick={onOpenInfo}
+      >
+        <span className="truncate">{roomName}</span>
+      </Button>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -125,17 +88,7 @@ export function RoomHeader({ membersOpen, onToggleMembers }: RoomHeaderProps) {
           <BellOff className="size-3.5" />
         </span>
       )}
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-        onClick={() => void toggleFavorite()}
-        className="size-6 text-muted-foreground hover:text-foreground"
-      >
-        <Star
-          className={`size-3.5 ${isFavorite ? "fill-current text-amber-500" : ""}`}
-        />
-      </Button>
+      <div className="flex-1" />
       {members.length > 0 && (
         <Button
           variant="ghost"
@@ -151,13 +104,15 @@ export function RoomHeader({ membersOpen, onToggleMembers }: RoomHeaderProps) {
           {members.length} member{members.length !== 1 ? "s" : ""}
         </Button>
       )}
-      <RenameRoomDialog
-        open={renameOpen}
-        roomId={roomId}
-        currentName={roomName}
-        onOpenChange={setRenameOpen}
-      />
-      <RoomInfoDialog open={infoOpen} roomId={roomId} onOpenChange={setInfoOpen} />
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="More room options"
+        className="size-6 text-muted-foreground"
+        onClick={onOpenMore}
+      >
+        <Ellipsis className="size-3.5" />
+      </Button>
     </>
   );
 }
