@@ -3,6 +3,7 @@ import { mkMatrixEvent } from "../../test/factories";
 import {
   EcoZoonEventType,
   decodeEcoZoonEvent,
+  extractToolCallContent,
   isEcoZoonLifecycle,
   isAgentMessageChunk,
   isToolCall,
@@ -13,6 +14,37 @@ import {
 
 const room = "!r:h.example";
 const sender = "@architect.acme:h.example";
+
+describe("extractToolCallContent", () => {
+  it("returns legacy string content as text with no diffs", () => {
+    expect(extractToolCallContent("hello")).toEqual({ text: "hello", diffs: [] });
+  });
+
+  it("extracts text blocks", () => {
+    const out = extractToolCallContent([
+      { type: "content", content: { type: "text", text: "line one" } },
+      { type: "content", content: { type: "text", text: "line two" } },
+    ]);
+    expect(out).toEqual({ text: "line one\nline two", diffs: [] });
+  });
+
+  it("extracts diff blocks (oldText null => empty old side)", () => {
+    const out = extractToolCallContent([
+      { type: "diff", path: "/abs/new.ts", oldText: null, newText: "export const x = 1\n" },
+      { type: "diff", path: "/abs/auth.ts", oldText: "a\n", newText: "b\n" },
+    ]);
+    expect(out.text).toBeNull();
+    expect(out.diffs).toEqual([
+      { path: "/abs/new.ts", oldText: "", newText: "export const x = 1\n" },
+      { path: "/abs/auth.ts", oldText: "a\n", newText: "b\n" },
+    ]);
+  });
+
+  it("returns empty for unknown content", () => {
+    expect(extractToolCallContent(undefined)).toEqual({ text: null, diffs: [] });
+    expect(extractToolCallContent([])).toEqual({ text: null, diffs: [] });
+  });
+});
 
 describe("decodeEcoZoonEvent", () => {
   it("decodes session.start", () => {

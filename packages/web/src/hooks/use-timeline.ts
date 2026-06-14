@@ -8,6 +8,7 @@ import {
 } from "matrix-js-sdk";
 import { useSyncExternalStore } from "react";
 import { MatrixClientPeg } from "../client/peg";
+import { extractToolCallContent, type DiffBlock } from "../events/eco-zoon";
 
 interface TimelineState {
   events: MatrixEvent[];
@@ -308,6 +309,7 @@ export function useThread(roomId: string, rootEventId: string): ThreadFullState 
 export interface ToolCallStatus {
   status: string | null;
   content: string | null;
+  diffs: DiffBlock[];
   /**
    * rawInput accumulated across the initial tool_call event and every
    * subsequent tool_call_update. Later events extend (rather than replace) the
@@ -322,12 +324,13 @@ export interface ToolCallStatus {
 const TOOL_CALL_EMPTY: ToolCallStatus = {
   status: null,
   content: null,
+  diffs: [],
   rawInput: null,
   latestUpdateTs: 0,
 };
 const toolCallCache = new Map<
   string,
-  { ts: number; status: string | null; rawInputKey: string; result: ToolCallStatus }
+  { ts: number; status: string | null; rawInputKey: string; diffKey: number; result: ToolCallStatus }
 >();
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -343,6 +346,7 @@ function snapshotToolCall(roomId: string, toolCallId: string): ToolCallStatus {
   let latestTs = -1;
   let latestStatus: string | null = null;
   let latestContent: string | null = null;
+  let latestDiffs: DiffBlock[] = [];
   let mergedInput: Record<string, unknown> | null = null;
 
   // Walk all events for this tool call in timeline order, accumulating
@@ -363,7 +367,7 @@ function snapshotToolCall(roomId: string, toolCallId: string): ToolCallStatus {
     const c = ev.getContent() as {
       tool_call_id?: string;
       status?: string;
-      content?: string;
+      content?: unknown;
       raw_input?: unknown;
     };
     if (isPlainObject(c.raw_input)) {
@@ -373,29 +377,34 @@ function snapshotToolCall(roomId: string, toolCallId: string): ToolCallStatus {
       if (ts >= latestTs) {
         latestTs = ts;
         latestStatus = c.status;
-        latestContent = typeof c.content === "string" ? c.content : null;
+        const parts = extractToolCallContent(c.content);
+        latestContent = parts.text;
+        latestDiffs = parts.diffs;
       }
     }
   }
 
   const rawInputKey = mergedInput ? JSON.stringify(mergedInput) : "";
+  const diffKey = latestDiffs.length;
   const cacheKey = `${roomId}:${toolCallId}`;
   const cached = toolCallCache.get(cacheKey);
   if (
     cached &&
     cached.ts === latestTs &&
     cached.status === latestStatus &&
-    cached.rawInputKey === rawInputKey
+    cached.rawInputKey === rawInputKey &&
+    cached.diffKey === diffKey
   ) {
     return cached.result;
   }
   const result: ToolCallStatus = {
     status: latestStatus,
     content: latestContent,
+    diffs: latestDiffs,
     rawInput: mergedInput,
     latestUpdateTs: latestTs > 0 ? latestTs : 0,
   };
-  toolCallCache.set(cacheKey, { ts: latestTs, status: latestStatus, rawInputKey, result });
+  toolCallCache.set(cacheKey, { ts: latestTs, status: latestStatus, rawInputKey, diffKey, result });
   return result;
 }
 

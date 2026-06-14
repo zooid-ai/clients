@@ -52,6 +52,44 @@ export interface ToolLocation {
   line?: number;
 }
 
+export interface DiffBlock {
+  path: string;
+  oldText: string;
+  newText: string;
+}
+
+export interface ToolCallContentParts {
+  text: string | null;
+  diffs: DiffBlock[];
+}
+
+/**
+ * Parse ACP `tool_call_update.content` (string legacy form, or a
+ * ToolCallContent[] array) into display parts. Text blocks are concatenated;
+ * `diff` blocks are kept structured. Unknown block types are ignored.
+ */
+export function extractToolCallContent(v: unknown): ToolCallContentParts {
+  if (typeof v === "string") return { text: v, diffs: [] };
+  if (!Array.isArray(v) || v.length === 0) return { text: null, diffs: [] };
+  const texts: string[] = [];
+  const diffs: DiffBlock[] = [];
+  for (const block of v) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as Record<string, unknown>;
+    if (b.type === "content" && b.content && typeof b.content === "object") {
+      const inner = b.content as Record<string, unknown>;
+      if (inner.type === "text" && typeof inner.text === "string") texts.push(inner.text);
+    } else if (b.type === "diff" && typeof b.path === "string" && typeof b.newText === "string") {
+      diffs.push({
+        path: b.path,
+        oldText: typeof b.oldText === "string" ? b.oldText : "",
+        newText: b.newText,
+      });
+    }
+  }
+  return { text: texts.length > 0 ? texts.join("\n") : null, diffs };
+}
+
 export type DecodedEcoZoonEvent =
   | { kind: "session.start"; sessionId: string }
   | { kind: "turn.start"; sessionId: string }
@@ -71,6 +109,7 @@ export type DecodedEcoZoonEvent =
       toolCallId: string;
       status: string;
       content?: string;
+      diffs?: DiffBlock[];
       rawInput?: Record<string, unknown>;
       locations?: ToolLocation[];
     }
@@ -168,12 +207,14 @@ export function decodeEcoZoonEvent(ev: MatrixEvent): DecodedEcoZoonEvent | null 
       const toolCallId = typeof c.tool_call_id === "string" ? c.tool_call_id : null;
       const status = typeof c.status === "string" ? c.status : null;
       if (!toolCallId || !status) return null;
+      const parts = extractToolCallContent(c.content);
       return {
         kind: "tool_call_update",
         sessionId,
         toolCallId,
         status,
-        content: extractContentText(c.content),
+        content: parts.text ?? undefined,
+        diffs: parts.diffs.length > 0 ? parts.diffs : undefined,
         rawInput: extractRawInput(c.raw_input),
         locations: extractLocations(c.locations),
       };
@@ -232,23 +273,3 @@ function extractLocations(v: unknown): ToolLocation[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
-/**
- * tool_call_update.content is either a string (legacy) or an array of
- * structured content blocks per ACP. Concatenate text blocks for display.
- */
-function extractContentText(v: unknown): string | undefined {
-  if (typeof v === "string") return v;
-  if (!Array.isArray(v) || v.length === 0) return undefined;
-  const texts: string[] = [];
-  for (const block of v) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as Record<string, unknown>;
-    if (b.type === "content" && b.content && typeof b.content === "object") {
-      const inner = b.content as Record<string, unknown>;
-      if (inner.type === "text" && typeof inner.text === "string") {
-        texts.push(inner.text);
-      }
-    }
-  }
-  return texts.length > 0 ? texts.join("\n") : undefined;
-}

@@ -14,6 +14,7 @@ import type { DecodedEcoZoonEvent } from "../../events/eco-zoon";
 import { useToolCallApproval, useToolCallStatus } from "@/hooks/use-timeline";
 import { useUserName } from "@/hooks/use-user-name";
 import { UserAvatar } from "@/components/user-avatar";
+import { DiffView } from "./diff-view";
 
 interface Props {
   decoded: DecodedEcoZoonEvent;
@@ -137,7 +138,7 @@ function ToolCallCard({
   ts: number;
 }) {
   const [open, setOpen] = useState(false);
-  const { status, content, rawInput: mergedRawInput, latestUpdateTs } = useToolCallStatus(
+  const { status, content, diffs, rawInput: mergedRawInput, latestUpdateTs } = useToolCallStatus(
     roomId,
     decoded.toolCallId,
   );
@@ -214,6 +215,13 @@ function ToolCallCard({
             <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-background/50 p-2 text-xs">
               {safeStringify(effectiveInput)}
             </pre>
+          )}
+          {diffs.length > 0 && (
+            <div className="space-y-1">
+              {diffs.map((d, i) => (
+                <DiffView key={i} diff={d} />
+              ))}
+            </div>
           )}
           {content && (
             <div className="mt-1 whitespace-pre-wrap break-words text-foreground/80">
