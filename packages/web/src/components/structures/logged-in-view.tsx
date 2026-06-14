@@ -107,7 +107,7 @@ export function LoggedInView() {
       </Sidebar>
       <SidebarInset data-testid="logged-in-view">
         <header className="flex h-12 items-center gap-2 border-b border-border px-3">
-          <SidebarTrigger aria-label="Toggle sidebar" />
+          <SidebarTrigger aria-label="Toggle sidebar" className="md:hidden" />
           <div className="flex flex-1 min-w-0 items-center">
             <RoomHeader
               membersOpen={rightPanel === "people"}
@@ -119,7 +119,7 @@ export function LoggedInView() {
         </header>
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         <main className="flex-1 min-h-0 overflow-hidden">
-          <div className="flex h-full min-h-0">
+          <div className="relative flex h-full min-h-0">
             <div className="min-w-0 flex-1 overflow-hidden">
               <Outlet context={{ spaceId } satisfies LoggedInOutletContext} />
             </div>

@@ -289,7 +289,7 @@ function PeopleView({
 
 export function RoomPanel({ roomId, spaceId, view, onNavigate, onClose }: RoomPanelProps) {
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-l border-border bg-background">
+    <aside className="absolute inset-0 z-20 flex flex-col overflow-y-auto border-l border-border bg-background md:relative md:inset-auto md:w-64 md:shrink-0">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
         <span className="text-sm font-semibold">Room info</span>
         <Button variant="ghost" size="icon" aria-label="Close panel" onClick={onClose}>

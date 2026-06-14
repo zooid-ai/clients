@@ -198,9 +198,6 @@ function ToolCallCard({
         aria-expanded={open}
         className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-muted/50"
       >
-        <ChevronRight
-          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-        />
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="font-medium">{title}</span>
         {subtitle && (
@@ -208,6 +205,9 @@ function ToolCallCard({
         )}
         <span className="ml-auto flex items-center gap-1.5">
           <StatusIndicator status={effectiveStatus} />
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+          />
         </span>
       </button>
       {open && (

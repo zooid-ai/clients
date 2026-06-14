@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { MatrixEvent } from "matrix-js-sdk";
 import { MessageSquare, TriangleAlertIcon } from "lucide-react";
 import { senderColor, splitMentions } from "@/lib/sender";
@@ -128,6 +129,20 @@ export function TextMessage({
       : c.format === "org.matrix.custom.html" && typeof c.formatted_body === "string" && c.formatted_body.length > 0);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selected, setSelected] = useState(false);
+  const isMobile = useIsMobile();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setSelected(false);
+      }
+    };
+    document.addEventListener("click", handleOutside);
+    return () => document.removeEventListener("click", handleOutside);
+  }, [selected]);
 
   const { events: threadEvents, totalCount } = useThreadPreview(
     roomId,
@@ -173,7 +188,12 @@ export function TextMessage({
   }
 
   return (
-    <div className="group relative flex gap-2 py-1.5 hover:bg-muted/30">
+    <div
+      ref={wrapperRef}
+      data-selected={selected || undefined}
+      onClick={() => { if (isMobile) setSelected(true); }}
+      className="group relative flex gap-2 py-1.5 hover:bg-muted/30 data-[selected]:bg-muted/30"
+    >
       <div className="mt-0.5 shrink-0">
         <AvatarWithPresence userId={sender} />
       </div>
@@ -245,7 +265,7 @@ export function TextMessage({
         )}
       </div>
 
-      <div className="pointer-events-none absolute -top-3 right-2 z-10 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+      <div className={`absolute -top-3 right-2 z-10 transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto ${selected ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
         <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-1.5 py-1 shadow-sm">
           <ReactionPicker roomId={roomId} eventId={eventId} />
           {!disableThreadAffordances && (
