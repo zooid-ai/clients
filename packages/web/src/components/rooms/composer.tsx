@@ -3,6 +3,8 @@ import { Paperclip, SendHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { displayNameOf, expandMentions, nameOfMember, senderColor } from "@/lib/sender";
 import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
+import { useAvailableCommands } from "../../hooks/use-available-commands";
+import { SlashCommandList } from "./slash-command-list";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
 import { useThreadPreview } from "../../hooks/use-timeline";
@@ -73,10 +75,15 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     [rawMembers],
   );
 
-  const slashCommands = useMemo(
-    () => listSlashCommands({ threadScoped }),
-    [threadScoped],
-  );
+  const advertised = useAvailableCommands(roomId);
+  const slashCommands = useMemo(() => {
+    const client = listSlashCommands({ threadScoped });
+    const clientNames = new Set(client.map((c) => c.name));
+    const agent = advertised
+      .filter((c) => !clientNames.has(c.name))
+      .map((c) => ({ name: c.name, description: c.description, source: "agent" as const }));
+    return [...client, ...agent];
+  }, [threadScoped, advertised]);
 
   const mentionMatches = useMemo(() => {
     if (!ac || ac.mode !== "mention") return [];
@@ -329,32 +336,21 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
         </div>
       )}
       {ac && matches.length > 0 && (
-        <ul
-          role="listbox"
-          aria-label={ac.mode === "slash" ? "Command suggestions" : "Mention suggestions"}
-          className="absolute bottom-full left-3 right-3 mb-1 max-h-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg"
-        >
-          {ac.mode === "slash"
-            ? slashMatches.map((cmd, i) => (
-                <li
-                  key={cmd.name}
-                  role="option"
-                  aria-selected={i === activeIdx}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    selectSlash(cmd);
-                  }}
-                  onMouseEnter={() => setActiveIdx(i)}
-                  className={
-                    "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm " +
-                    (i === activeIdx ? "bg-accent text-accent-foreground" : "")
-                  }
-                >
-                  <span className="font-mono font-semibold text-primary">/{cmd.name}</span>
-                  <span className="text-xs text-muted-foreground">{cmd.description}</span>
-                </li>
-              ))
-            : mentionMatches.map((m, i) => (
+        <div className="absolute bottom-full left-3 right-3 mb-1">
+          {ac.mode === "slash" ? (
+            <SlashCommandList
+              commands={slashMatches}
+              activeIdx={activeIdx}
+              onSelect={selectSlash}
+              onHover={setActiveIdx}
+            />
+          ) : (
+            <ul
+              role="listbox"
+              aria-label="Mention suggestions"
+              className="max-h-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg"
+            >
+              {mentionMatches.map((m, i) => (
                 <li
                   key={m.userId}
                   role="option"
@@ -375,7 +371,9 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
                   <span className="text-xs text-muted-foreground">{m.userId}</span>
                 </li>
               ))}
-        </ul>
+            </ul>
+          )}
+        </div>
       )}
       {attachment && (
         <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1 text-sm">

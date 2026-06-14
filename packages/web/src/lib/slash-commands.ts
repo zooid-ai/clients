@@ -6,6 +6,7 @@ export interface ParsedSlashCommand {
 export interface SlashCommandMeta {
   name: string;
   description: string;
+  source: "client" | "agent";
 }
 
 interface SlashCommandSpec {
@@ -52,6 +53,6 @@ export function parseSlashCommand(
 export function listSlashCommands(ctx: { threadScoped: boolean } = { threadScoped: false }): SlashCommandMeta[] {
   return COMMANDS.flatMap((c) => {
     if (c.threadScopedOnly && !ctx.threadScoped) return [];
-    return c.names.map((name) => ({ name, description: c.description }));
+    return c.names.map((name) => ({ name, description: c.description, source: "client" as const }));
   });
 }

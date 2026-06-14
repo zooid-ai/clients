@@ -306,6 +306,45 @@ describe("type guards", () => {
   });
 });
 
+describe("decodeEcoZoonEvent — available_commands_update (ZNC021)", () => {
+  it("decodes available_commands_update", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: EcoZoonEventType.AvailableCommandsUpdate,
+      content: {
+        session_id: "s1",
+        available_commands: [
+          { name: "plan", description: "Switch to plan mode" },
+          { name: "compact", description: "Compact the context" },
+        ],
+      },
+    });
+    expect(decodeEcoZoonEvent(ev)).toEqual({
+      kind: "available_commands",
+      sessionId: "s1",
+      commands: [
+        { name: "plan", description: "Switch to plan mode" },
+        { name: "compact", description: "Compact the context" },
+      ],
+    });
+  });
+
+  it("drops malformed commands but keeps valid ones", () => {
+    const ev = mkMatrixEvent({
+      roomId: room,
+      sender,
+      type: EcoZoonEventType.AvailableCommandsUpdate,
+      content: { session_id: "s1", available_commands: [{ description: "no name" }, { name: "ok" }] },
+    });
+    expect(decodeEcoZoonEvent(ev)).toEqual({
+      kind: "available_commands",
+      sessionId: "s1",
+      commands: [{ name: "ok", description: "" }],
+    });
+  });
+});
+
 describe("decodeEcoZoonEvent — error (ZOD055)", () => {
   it("decodes eco.zoon.error with full payload", () => {
     const ev = mkMatrixEvent({

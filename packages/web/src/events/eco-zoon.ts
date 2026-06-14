@@ -45,6 +45,7 @@ export const EcoZoonEventType = {
   Plan: "eco.zoon.plan",
   TurnEnd: "eco.zoon.turn.end",
   Error: "eco.zoon.error",
+  AvailableCommandsUpdate: "eco.zoon.available_commands_update",
 } as const;
 
 export interface ToolLocation {
@@ -119,6 +120,7 @@ export type DecodedEcoZoonEvent =
       entries: PlanBoardEntry[];
     }
   | { kind: "turn.end"; sessionId: string; stopReason?: string }
+  | { kind: "available_commands"; sessionId: string; commands: Array<{ name: string; description: string }> }
   | {
       kind: "error";
       sessionId: string | null;
@@ -243,6 +245,18 @@ export function decodeEcoZoonEvent(ev: MatrixEvent): DecodedEcoZoonEvent | null 
         sessionId,
         stopReason: typeof c.stop_reason === "string" ? c.stop_reason : undefined,
       };
+
+    case EcoZoonEventType.AvailableCommandsUpdate: {
+      if (!Array.isArray(c.available_commands)) return null;
+      const commands = (c.available_commands as unknown[])
+        .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : null))
+        .filter((x): x is Record<string, unknown> => x !== null && typeof x.name === "string")
+        .map((x) => ({
+          name: x.name as string,
+          description: typeof x.description === "string" ? x.description : "",
+        }));
+      return { kind: "available_commands", sessionId, commands };
+    }
 
     default:
       return null;
