@@ -14,17 +14,22 @@ export interface PlanSnapshot {
 
 const planCache = new Map<string, { ts: number; count: number; result: PlanSnapshot | null }>();
 
-function snapshotPlan(roomId: string): PlanSnapshot | null {
+function snapshotPlan(roomId: string, threadId: string): PlanSnapshot | null {
   const client = MatrixClientPeg.safeGet();
   const room = client?.getRoom(roomId);
   if (!room) return null;
 
   // A turn has at most one live plan: the newest plan-bearing event wins
-  // (ACP full-snapshot replace semantics — no merge).
+  // (ACP full-snapshot replace semantics — no merge). Scoped to the thread
+  // so plans from different threads don't bleed into each other.
   let latestTs = -1;
   let latest: PlanSnapshot | null = null;
   let planEventCount = 0;
   for (const ev of allRoomEvents(room)) {
+    // Only consider events that belong to this thread.
+    const rel = ev.getRelation();
+    if (rel?.rel_type !== "m.thread" || rel.event_id !== threadId) continue;
+
     const t = ev.getType();
     const c = ev.getContent() as Record<string, unknown>;
     const sessionId = typeof c.session_id === "string" ? c.session_id : null;
@@ -52,16 +57,17 @@ function snapshotPlan(roomId: string): PlanSnapshot | null {
     }
   }
 
-  const cached = planCache.get(roomId);
+  const cacheKey = `${roomId}:${threadId}`;
+  const cached = planCache.get(cacheKey);
   if (cached && cached.ts === latestTs && cached.count === planEventCount) return cached.result;
-  planCache.set(roomId, { ts: latestTs, count: planEventCount, result: latest });
+  planCache.set(cacheKey, { ts: latestTs, count: planEventCount, result: latest });
   return latest;
 }
 
-export function usePlan(roomId: string): PlanSnapshot | null {
+export function usePlan(roomId: string, threadId: string): PlanSnapshot | null {
   return useSyncExternalStore(
     makeSubscribe(roomId),
-    () => snapshotPlan(roomId),
+    () => snapshotPlan(roomId, threadId),
     () => null,
   );
 }

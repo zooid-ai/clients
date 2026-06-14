@@ -13,6 +13,7 @@ import {
 import type { DecodedEcoZoonEvent } from "../../events/eco-zoon";
 import { useToolCallApproval, useToolCallStatus } from "@/hooks/use-timeline";
 import { useUserName } from "@/hooks/use-user-name";
+import { UserAvatar } from "@/components/user-avatar";
 
 interface Props {
   decoded: DecodedEcoZoonEvent;
@@ -50,10 +51,14 @@ export function EcoZoonEventTile({ decoded, sender, roomId, ts }: Props) {
       return null;
 
     case "plan":
-      // The live plan renders in the PlanBoard panel (usePlan); the timeline
-      // only notes that an update happened, so progress reads as one mutating
-      // checklist instead of a stack of snapshots.
-      return <Divider text="updated plan" />;
+      return (
+        <div className="flex items-center gap-2 py-1.5">
+          <div className="shrink-0">
+            <UserAvatar userId={sender} size="sm" />
+          </div>
+          <span className="text-xs text-muted-foreground">{senderName} updated plan</span>
+        </div>
+      );
   }
 }
 

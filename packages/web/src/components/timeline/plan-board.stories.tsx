@@ -1,10 +1,26 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PlanBoard } from "./plan-board";
 
+const noop = () => {};
+
+const MIXED_PLAN = {
+  sessionId: "s1",
+  entries: [
+    { content: "Buy bananas", status: "completed" },
+    { content: "Buy bread", status: "in_progress" },
+    { content: "Buy milk", status: "pending" },
+  ],
+};
+
 const meta = {
   title: "Timeline/PlanBoard",
   component: PlanBoard,
   parameters: { layout: "padded" },
+  args: {
+    onCollapse: noop,
+    onExpand: noop,
+    onDismiss: noop,
+  },
 } satisfies Meta<typeof PlanBoard>;
 
 export default meta;
@@ -28,16 +44,11 @@ export const AllPending: Story = {
 };
 
 export const Mixed: Story = {
-  args: {
-    plan: {
-      sessionId: "s1",
-      entries: [
-        { content: "Buy bananas", status: "completed" },
-        { content: "Buy bread", status: "in_progress" },
-        { content: "Buy milk", status: "pending" },
-      ],
-    },
-  },
+  args: { plan: MIXED_PLAN },
+};
+
+export const Collapsed: Story = {
+  args: { plan: MIXED_PLAN, collapsed: true },
 };
 
 export const CancelledFailed: Story = {

@@ -300,7 +300,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
   };
 
   return (
-    <div className="relative shrink-0 border-t border-border p-3">
+    <div className="relative shrink-0 p-3">
       {error && (
         <div role="alert" className="mb-2 text-sm text-destructive">
           {error}
