@@ -61,13 +61,21 @@ export function MemberStack({ members, open, onToggle }: MemberStackProps) {
             aria-pressed={open}
             aria-label={label}
             onClick={onToggle}
-            className={`h-7 px-1 ${open ? "bg-accent" : ""}`}
+            className="h-7 px-1 hover:bg-transparent"
           >
-            <AvatarGroup>
+            {/* Open state highlights the avatars themselves with a neutral
+                foreground ring — white in dark mode (twMerge overrides the
+                group's default ring-background) — instead of painting a box
+                behind them. */}
+            <AvatarGroup className={open ? "*:data-[slot=avatar]:ring-foreground" : undefined}>
               {shown.map((m) => (
                 <UserAvatar key={m.userId} userId={m.userId} size="sm" />
               ))}
-              {overflow > 0 && <AvatarGroupCount>+{overflow}</AvatarGroupCount>}
+              {overflow > 0 && (
+                <AvatarGroupCount className={open ? "ring-foreground text-foreground" : undefined}>
+                  +{overflow}
+                </AvatarGroupCount>
+              )}
             </AvatarGroup>
           </Button>
         </TooltipTrigger>
