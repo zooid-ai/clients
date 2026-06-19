@@ -6,6 +6,7 @@ import { ZooidEventTile } from "./zooid-event";
 import { ErrorTile } from "./error-tile";
 import { MediaMessage } from "./media-message";
 import { MembershipEvent } from "./membership-event";
+import { SessionDivider } from "./session-divider";
 import { TextMessage } from "./text-message";
 
 const MEDIA_MSGTYPES = new Set(["m.image", "m.file", "m.video", "m.audio"]);
@@ -40,13 +41,7 @@ export function EventTile({
   // as input to <ApprovalCard /> resolution. Skip silently.
   if (event.getType() === ApprovalEventType.Response) return null;
   if (event.getType() === "dev.zooid.session_reset") {
-    return (
-      <div className="flex items-center gap-2 py-3 text-xs uppercase tracking-wider text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        <span>new session</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-    );
+    return <SessionDivider label="new session" />;
   }
   if (event.getType() === "m.room.member") {
     return <MembershipEvent event={event} />;

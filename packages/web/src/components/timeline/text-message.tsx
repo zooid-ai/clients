@@ -13,6 +13,7 @@ import { useUserName } from "@/hooks/use-user-name";
 import { useEditedContent } from "@/hooks/use-edited-content";
 import { ZooidEventType } from "@/events/zooid-events";
 import { FormattedMessageBody } from "./formatted-message-body";
+import { MessageTile } from "./message-tile";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
 import { ReadReceiptsRow } from "./read-receipts-row";
@@ -154,21 +155,15 @@ export function TextMessage({
   // Tombstone for redacted messages
   if (event.isRedacted()) {
     return (
-      <div className="group relative flex gap-2 py-1.5 hover:bg-muted/30">
-        <div className="mt-0.5 shrink-0">
-          <AvatarWithPresence userId={sender} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <span
-            className="font-semibold text-sm leading-6"
-            style={{ color: senderColor(sender) }}
-            title={sender}
-          >
-            {senderName}
-          </span>
-          <p className="text-sm italic text-muted-foreground">Message deleted</p>
-        </div>
-      </div>
+      <MessageTile
+        className="hover:bg-muted/30"
+        avatar={<AvatarWithPresence userId={sender} />}
+        senderName={senderName}
+        senderColor={senderColor(sender)}
+        senderTitle={sender}
+      >
+        <p className="text-sm italic text-muted-foreground">Message deleted</p>
+      </MessageTile>
     );
   }
 
@@ -187,25 +182,38 @@ export function TextMessage({
     setConfirmDelete(false);
   }
 
+  const actions = (
+    <div className={`absolute -top-3 right-2 z-10 transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto ${selected ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+      <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-1.5 py-1 shadow-sm">
+        <ReactionPicker roomId={roomId} eventId={eventId} />
+        {!disableThreadAffordances && (
+          <button
+            type="button"
+            aria-label="Reply"
+            onClick={() => onReplyInThread?.(eventId)}
+            className="inline-flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <MessageSquare className="size-4" />
+          </button>
+        )}
+        {isMine && <EditButton onClick={() => setEditing(true)} />}
+        {canRedact && <DeleteButton onClick={() => setConfirmDelete(true)} />}
+      </div>
+    </div>
+  );
+
   return (
-    <div
+    <MessageTile
       ref={wrapperRef}
       data-selected={selected || undefined}
       onClick={() => { if (isMobile) setSelected(true); }}
-      className="group relative flex gap-2 py-1.5 hover:bg-muted/30 data-[selected]:bg-muted/30"
+      className="hover:bg-muted/30 data-[selected]:bg-muted/30"
+      avatar={<AvatarWithPresence userId={sender} />}
+      senderName={senderName}
+      senderColor={senderColor(sender)}
+      senderTitle={sender}
+      actions={actions}
     >
-      <div className="mt-0.5 shrink-0">
-        <AvatarWithPresence userId={sender} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <span
-          className="font-semibold text-sm leading-6"
-          style={{ color: senderColor(sender) }}
-          title={sender}
-        >
-          {senderName}
-        </span>
-
         {editing ? (
           <InlineEdit
             initialValue={displayBody}
@@ -263,31 +271,12 @@ export function TextMessage({
             Reply in thread
           </button>
         )}
-      </div>
-
-      <div className={`absolute -top-3 right-2 z-10 transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto ${selected ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-1.5 py-1 shadow-sm">
-          <ReactionPicker roomId={roomId} eventId={eventId} />
-          {!disableThreadAffordances && (
-            <button
-              type="button"
-              aria-label="Reply"
-              onClick={() => onReplyInThread?.(eventId)}
-              className="inline-flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <MessageSquare className="size-4" />
-            </button>
-          )}
-          {isMine && <EditButton onClick={() => setEditing(true)} />}
-          {canRedact && <DeleteButton onClick={() => setConfirmDelete(true)} />}
-        </div>
-      </div>
 
       <DeleteConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         onConfirm={handleConfirmDelete}
       />
-    </div>
+    </MessageTile>
   );
 }
