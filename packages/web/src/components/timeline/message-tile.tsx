@@ -9,6 +9,8 @@ export interface MessageTileProps extends React.ComponentProps<"div"> {
   senderColor?: string;
   /** `title` attribute for the sender name (typically the full mxid). */
   senderTitle?: string;
+  /** Timestamp node rendered inline after the sender name. */
+  timestamp?: React.ReactNode;
   /** Absolutely-positioned hover affordances (reaction picker, edit, delete…). */
   actions?: React.ReactNode;
   children: React.ReactNode;
@@ -22,19 +24,22 @@ export interface MessageTileProps extends React.ComponentProps<"div"> {
  */
 export const MessageTile = React.forwardRef<HTMLDivElement, MessageTileProps>(
   function MessageTile(
-    { avatar, senderName, senderColor, senderTitle, actions, children, className, ...rest },
+    { avatar, senderName, senderColor, senderTitle, timestamp, actions, children, className, ...rest },
     ref,
   ) {
     return (
       <div ref={ref} className={cn("group relative flex gap-2 py-1.5", className)} {...rest}>
         <div className="mt-0.5 shrink-0">{avatar}</div>
         <div className="min-w-0 flex-1">
-          <span
-            className="font-semibold text-sm leading-6"
-            style={senderColor ? { color: senderColor } : undefined}
-            title={senderTitle}
-          >
-            {senderName}
+          <span className="flex items-baseline gap-1.5">
+            <span
+              className="font-semibold text-sm leading-6"
+              style={senderColor ? { color: senderColor } : undefined}
+              title={senderTitle}
+            >
+              {senderName}
+            </span>
+            {timestamp}
           </span>
           {children}
         </div>
