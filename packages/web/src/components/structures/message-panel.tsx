@@ -1,4 +1,8 @@
+import { Fragment } from "react";
 import type { MatrixEvent } from "matrix-js-sdk";
+import { useNow } from "@/hooks/use-now";
+import { formatDayDivider, isSameDay } from "@/lib/time";
+import { DateDivider } from "../timeline/date-divider";
 import { EventTile } from "../timeline/event-tile";
 
 function MessageSkeleton() {
@@ -24,6 +28,7 @@ export function MessagePanel({
   onReplyInThread?: (eventId: string) => void;
   onViewThread?: (eventId: string) => void;
 }) {
+  const now = useNow();
   return (
     <ol className="flex flex-col gap-0.5 px-4 py-3">
       {pendingRootIds?.map((id) => (
@@ -31,11 +36,22 @@ export function MessagePanel({
           <MessageSkeleton />
         </li>
       ))}
-      {events.map((ev) => (
-        <li key={ev.getId() ?? `${ev.getType()}-${ev.getTs()}`} className="contents">
-          <EventTile event={ev} onReplyInThread={onReplyInThread} onViewThread={onViewThread} />
-        </li>
-      ))}
+      {events.map((ev, i) => {
+        const prev = events[i - 1];
+        const showDay = !prev || !isSameDay(prev.getTs(), ev.getTs());
+        return (
+          <Fragment key={ev.getId() ?? `${ev.getType()}-${ev.getTs()}`}>
+            {showDay && (
+              <li className="contents">
+                <DateDivider label={formatDayDivider(ev.getTs(), now)} />
+              </li>
+            )}
+            <li className="contents">
+              <EventTile event={ev} onReplyInThread={onReplyInThread} onViewThread={onViewThread} />
+            </li>
+          </Fragment>
+        );
+      })}
     </ol>
   );
 }

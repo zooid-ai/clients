@@ -14,6 +14,7 @@ import { useEditedContent } from "@/hooks/use-edited-content";
 import { ZooidEventType } from "@/events/zooid-events";
 import { FormattedMessageBody } from "./formatted-message-body";
 import { MessageTile } from "./message-tile";
+import { MessageTimestamp } from "./message-timestamp";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
 import { ReadReceiptsRow } from "./read-receipts-row";
@@ -161,6 +162,7 @@ export function TextMessage({
         senderName={senderName}
         senderColor={senderColor(sender)}
         senderTitle={sender}
+        timestamp={<MessageTimestamp ts={event.getTs()} />}
       >
         <p className="text-sm italic text-muted-foreground">Message deleted</p>
       </MessageTile>
@@ -212,6 +214,7 @@ export function TextMessage({
       senderName={senderName}
       senderColor={senderColor(sender)}
       senderTitle={sender}
+      timestamp={<MessageTimestamp ts={event.getTs()} />}
       actions={actions}
     >
         {editing ? (
