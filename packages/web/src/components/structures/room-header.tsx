@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { MatrixClientPeg } from "../../client/peg";
+import { MemberStack } from "./member-stack";
 import { useJoinRule } from "../../hooks/use-join-rule";
 import { useMemberRoles } from "../../hooks/use-member-roles";
 import { useRoomFavorite } from "../../hooks/use-room-favorite";
@@ -90,19 +91,7 @@ export function RoomHeader({ membersOpen, onToggleMembers, onOpenInfo, onOpenMor
       )}
       <div className="flex-1" />
       {members.length > 0 && (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-pressed={membersOpen}
-          onClick={onToggleMembers}
-          className={`h-6 px-1.5 text-xs ${
-            membersOpen
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground"
-          }`}
-        >
-          {members.length} member{members.length !== 1 ? "s" : ""}
-        </Button>
+        <MemberStack members={members} open={membersOpen} onToggle={onToggleMembers} />
       )}
       <Button
         variant="ghost"
