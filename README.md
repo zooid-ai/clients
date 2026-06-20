@@ -61,6 +61,16 @@ pnpm -C packages/web dev
 
 In normal use you don't run the web client standalone — `zooid dev` (from the Zooid repo) brings up Tuwunel + the daemon + this web client together as a full local stack. Run it standalone when iterating on the client against an existing homeserver.
 
+You must point the client at a homeserver. Set `VITE_MATRIX_HOMESERVER_URL` before starting Vite, or use the `dev:matrix.org` shortcut to run against the public matrix.org homeserver with no config:
+
+```bash
+# Against a local or custom homeserver
+VITE_MATRIX_HOMESERVER_URL=https://matrix.example.com pnpm -C packages/web dev
+
+# Against matrix.org (no config needed)
+pnpm -C packages/web dev:matrix.org
+```
+
 ## Commands
 
 ```bash
