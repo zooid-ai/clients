@@ -57,6 +57,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const EmptyRoomBanner: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedBannerRoom(0);
     return <TimelinePanel roomId={ROOM_ID} />;
@@ -64,6 +65,7 @@ export const EmptyRoomBanner: Story = {
 };
 
 export const BannerAboveMessages: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedBannerRoom(3);
     return <TimelinePanel roomId={ROOM_ID} />;

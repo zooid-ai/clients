@@ -51,6 +51,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const EmptyRoomHero: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedRoom({ topic: "Welcome to #general — the town square for all things Zooid. Say hello!" });
     return <RoomBanner roomId={ROOM_ID} emptyRoom />;
@@ -58,6 +59,7 @@ export const EmptyRoomHero: Story = {
 };
 
 export const WithTopic: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedRoom({ topic: "Ship the daemon. Fast, reliable, composable." });
     return <RoomBanner roomId={ROOM_ID} />;
@@ -65,6 +67,7 @@ export const WithTopic: Story = {
 };
 
 export const NoTopic: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedRoom();
     return <RoomBanner roomId={ROOM_ID} />;
@@ -72,6 +75,7 @@ export const NoTopic: Story = {
 };
 
 export const Editable: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedRoom({ topic: "Ship the daemon.", canEdit: true });
     return <RoomBanner roomId={ROOM_ID} onEdit={() => alert("edit topic")} />;
@@ -79,6 +83,7 @@ export const Editable: Story = {
 };
 
 export const LongTopic: Story = {
+  args: { roomId: ROOM_ID },
   render: () => {
     seedRoom({
       topic:
