@@ -19,7 +19,7 @@ function seedThreadWithLongCommand() {
     sender: ME,
     type: "m.room.message",
     content: { msgtype: "m.text", body: "commit the changes" },
-    event_id: ROOT_EVENT_ID,
+    eventId: ROOT_EVENT_ID,
   });
   pushTimelineEvent(room, rootEvent);
 
