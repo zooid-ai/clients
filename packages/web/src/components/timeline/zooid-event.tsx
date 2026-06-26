@@ -191,12 +191,12 @@ function ToolCallCard({
       : approval.toolInput) ?? undefined;
   const subtitle = summarizeRawInput(decoded.toolKind, effectiveInput, decoded.locations);
   return (
-    <div className="my-1 rounded-md border border-border bg-muted/30">
+    <div className="my-1 min-w-0 overflow-x-hidden rounded-md border border-border bg-muted/30">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-muted/50"
+        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-muted/50"
       >
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="font-medium">{title}</span>
@@ -245,7 +245,7 @@ function ToolCallCard({
                 );
               }
               return (
-                <pre className="mt-1 max-h-64 overflow-auto rounded-md border border-border bg-muted p-2 text-xs text-foreground">
+                <pre className="mt-1 max-h-64 max-w-full overflow-auto rounded-md border border-border bg-muted p-2 text-xs text-foreground">
                   {safeStringify(effectiveInput)}
                 </pre>
               );
