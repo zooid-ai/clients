@@ -206,3 +206,45 @@ export const WithBashMarkdownOutput: Story = {
     return <TimelinePanel roomId={ROOM_ID} />;
   },
 };
+
+function seedLongCodeBlockRoom() {
+  const client = makeFakeClient({ userId: ME });
+  const room = makeRoom(ROOM_ID, { client, myUserId: ME });
+  (client as unknown as { getRoom: (id: string) => unknown }).getRoom = (id: string) =>
+    id === ROOM_ID ? room : null;
+
+  pushTimelineEvent(
+    room,
+    mkMatrixEvent({
+      roomId: ROOM_ID,
+      sender: ME,
+      type: "m.room.message",
+      content: { msgtype: "m.text", body: "show me the output" },
+    }),
+  );
+
+  pushTimelineEvent(
+    room,
+    mkMatrixEvent({
+      roomId: ROOM_ID,
+      sender: AGENT,
+      type: "m.room.message",
+      content: {
+        msgtype: "m.notice",
+        body: "Here is the output:",
+        format: "org.matrix.custom.html",
+        formatted_body: "<p>Here is the output:</p><pre><code>error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'. This is a very long compiler error message that should scroll horizontally inside the code block rather than overflowing the timeline panel and creating a horizontal scrollbar on the whole page.\n\nat src/components/timeline/approval-card-view.tsx:44:12\nat src/components/timeline/formatted-message-body.tsx:84:5</code></pre><p>You can fix this by adding a null-check before calling the function.</p>",
+      },
+    }),
+  );
+
+  MatrixClientPeg.injectClientForTest(client);
+}
+
+export const WithLongCodeBlock: Story = {
+  args: { roomId: ROOM_ID },
+  render: () => {
+    seedLongCodeBlockRoom();
+    return <TimelinePanel roomId={ROOM_ID} />;
+  },
+};
