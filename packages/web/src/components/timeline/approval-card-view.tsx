@@ -58,7 +58,7 @@ export function ApprovalCardView({
     return (
       <Card data-testid="approval-card" className="my-2 max-w-xl">
         <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
+          <CardTitle className="text-base break-words">{title}</CardTitle>
           <CardDescription>
             {subtitle && <span className="block">{subtitle}</span>}
             {resolution.decision === "allow" ? "Approved" : "Cancelled"} by{" "}
@@ -72,7 +72,7 @@ export function ApprovalCardView({
   return (
     <Card data-testid="approval-card" className="my-2 max-w-xl">
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle className="text-base break-words">{title}</CardTitle>
         {subtitle && (
           <CardDescription className="font-mono text-xs break-all">{subtitle}</CardDescription>
         )}
@@ -134,6 +134,7 @@ export function ApprovalCardView({
                   variant={isReject ? "outline" : "default"}
                   disabled={sending}
                   onClick={() => onRespond?.(decision, opt.optionId)}
+                  className="whitespace-normal break-words h-auto"
                 >
                   {opt.name}
                 </Button>

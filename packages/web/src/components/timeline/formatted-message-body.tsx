@@ -89,7 +89,7 @@ export function FormattedMessageBody({ html, roomId }: Props) {
         // and re-bind the prose color tokens to the shadcn theme so the
         // Reef palette stays consistent across light/dark.
         "prose-p:my-1 prose-headings:mt-3 prose-headings:mb-1",
-        "prose-pre:my-2 prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border",
+        "prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border",
         "prose-code:bg-muted prose-code:text-foreground prose-code:rounded-sm prose-code:px-1 prose-code:py-px prose-code:font-normal",
         "prose-code:before:content-none prose-code:after:content-none",
         "prose-a:text-primary prose-a:underline prose-a:underline-offset-2",
