@@ -14,6 +14,7 @@
     "dev": "vite",
     "dev:matrix.org": "VITE_MATRIX_HOMESERVER_URL=https://matrix.org vite",
     "build": "tsc --noEmit && vite build",
+    "deploy:zooid.zoon.eco": "bash scripts/deploy-zooid-zoon-eco.sh",
     "prepublishOnly": "pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",

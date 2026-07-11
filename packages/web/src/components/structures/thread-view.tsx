@@ -83,19 +83,23 @@ export function ThreadView({
           <LoadMoreButton loading={loading} hasMore={hasMore} onClick={loadMore} />
         )}
         <ol className="flex flex-col gap-0.5 px-4 py-3">
-          <li>
-            {root ? (
+          {root ? (
+            <li className="contents">
               <EventTile event={root} disableThreadAffordances />
-            ) : rootPending ? (
+            </li>
+          ) : rootPending ? (
+            <li>
               <MessageSkeleton />
-            ) : (
+            </li>
+          ) : (
+            <li>
               <div className="text-sm text-muted-foreground italic py-2">
                 Thread root unavailable.
               </div>
-            )}
-          </li>
+            </li>
+          )}
           {events.map((ev) => (
-            <li key={ev.getId() ?? `${ev.getType()}-${ev.getTs()}`}>
+            <li key={ev.getId() ?? `${ev.getType()}-${ev.getTs()}`} className="contents">
               <EventTile event={ev} disableThreadAffordances />
             </li>
           ))}

@@ -29,7 +29,7 @@ function renderToolOutput(text: string) {
     const html = DOMPurify.sanitize(marked.parse(text) as string);
     return (
       <div
-        className="prose prose-sm dark:prose-invert max-w-none min-w-0 prose-pre:my-1 prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-code:bg-muted prose-code:text-foreground prose-code:rounded-sm prose-code:px-1 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none"
+        className="prose prose-sm dark:prose-invert max-w-none min-w-0 prose-pre:my-1 prose-pre:overflow-x-auto prose-pre:max-w-full prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-code:bg-muted prose-code:text-foreground prose-code:rounded-sm prose-code:px-1 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
@@ -201,7 +201,7 @@ function ToolCallCard({
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="font-medium">{title}</span>
         {subtitle && (
-          <span className="text-xs text-muted-foreground font-mono truncate">{subtitle}</span>
+          <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{subtitle}</span>
         )}
         <span className="ml-auto flex items-center gap-1.5">
           <StatusIndicator status={effectiveStatus} />
@@ -245,7 +245,7 @@ function ToolCallCard({
                 );
               }
               return (
-                <pre className="mt-1 max-h-64 overflow-auto rounded-md border border-border bg-muted p-2 text-xs text-foreground">
+                <pre className="mt-1 max-h-64 max-w-full overflow-auto rounded-md border border-border bg-muted p-2 text-xs text-foreground">
                   {safeStringify(effectiveInput)}
                 </pre>
               );

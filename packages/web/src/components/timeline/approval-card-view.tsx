@@ -58,9 +58,9 @@ export function ApprovalCardView({
     return (
       <Card data-testid="approval-card" className="my-2 max-w-xl">
         <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
+          <CardTitle className="text-base break-words">{title}</CardTitle>
           <CardDescription>
-            {subtitle && <span className="block">{subtitle}</span>}
+            {subtitle && <span className="block break-words">{subtitle}</span>}
             {resolution.decision === "allow" ? "Approved" : "Cancelled"} by{" "}
             <span>{resolution.respondedBy}</span>
           </CardDescription>
@@ -72,7 +72,7 @@ export function ApprovalCardView({
   return (
     <Card data-testid="approval-card" className="my-2 max-w-xl">
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle className="text-base break-words">{title}</CardTitle>
         {subtitle && (
           <CardDescription className="font-mono text-xs break-all">{subtitle}</CardDescription>
         )}
@@ -124,21 +124,24 @@ export function ApprovalCardView({
               </Button>
             </>
           ) : (
-            options.map((opt) => {
-              const isReject = opt.kind.startsWith("reject");
-              const decision = isReject ? "cancel" : "allow";
-              return (
-                <Button
-                  key={opt.optionId}
-                  type="button"
-                  variant={isReject ? "outline" : "default"}
-                  disabled={sending}
-                  onClick={() => onRespond?.(decision, opt.optionId)}
-                >
-                  {opt.name}
-                </Button>
-              );
-            })
+            <div className="flex w-full flex-col gap-2">
+              {options.map((opt) => {
+                const isReject = opt.kind.startsWith("reject");
+                const decision = isReject ? "cancel" : "allow";
+                return (
+                  <Button
+                    key={opt.optionId}
+                    type="button"
+                    variant={isReject ? "outline" : "default"}
+                    disabled={sending}
+                    onClick={() => onRespond?.(decision, opt.optionId)}
+                    className="h-auto w-full justify-start whitespace-normal break-words text-left"
+                  >
+                    {opt.name}
+                  </Button>
+                );
+              })}
+            </div>
           )}
         </CardFooter>
       )}
