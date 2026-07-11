@@ -60,7 +60,7 @@ export function ApprovalCardView({
         <CardHeader>
           <CardTitle className="text-base break-words">{title}</CardTitle>
           <CardDescription>
-            {subtitle && <span className="block">{subtitle}</span>}
+            {subtitle && <span className="block break-words">{subtitle}</span>}
             {resolution.decision === "allow" ? "Approved" : "Cancelled"} by{" "}
             <span>{resolution.respondedBy}</span>
           </CardDescription>

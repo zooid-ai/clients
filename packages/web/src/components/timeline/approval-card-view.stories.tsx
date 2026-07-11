@@ -47,3 +47,17 @@ export const Resolved: Story = {
     resolution: { decision: "allow", respondedBy: "@beno:h.example" },
   },
 };
+
+// Regression: a resolved approval whose subtitle is a long command with
+// unbreakable file-path tokens. The subtitle must wrap (break-words) rather than
+// run off the edge of the card.
+export const ResolvedLongCommand: Story = {
+  args: {
+    title: "Run command",
+    subtitle:
+      "git -C /Users/ori/Code/z/zooid-clients diff --stat /Users/ori/Code/z/zooid-clients/packages/web/src/components/structures/timeline-panel.diff.stories.tsx",
+    canApprove: true,
+    options: [],
+    resolution: { decision: "allow", respondedBy: "@beno:h.example" },
+  },
+};
