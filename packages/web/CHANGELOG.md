@@ -1,5 +1,15 @@
 # @zooid/zoon-web
 
+## 0.9.0
+
+### Minor Changes
+
+- Contain wide, unbreakable content within the chat pane. `min-w-0` on
+  `SidebarInset` lets the pane shrink below its content's intrinsic width, so a
+  long command in a tool-call card no longer pushes the composer past the
+  viewport; the resolved-approval subtitle now wraps long paths (`break-words`).
+  Includes `InLayoutChain` and `ResolvedLongCommand` regression stories.
+
 ## 0.8.0
 
 ### Minor Changes
