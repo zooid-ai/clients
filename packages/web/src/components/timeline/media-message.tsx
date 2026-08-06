@@ -2,6 +2,7 @@ import type { MatrixEvent } from "matrix-js-sdk";
 import { Download, FileIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
+import { fetchAuthedMedia } from "../../lib/matrix/authed-media";
 
 interface MediaInfo {
   mimetype?: string;
@@ -15,11 +16,6 @@ function humanSize(bytes: number | undefined): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function parseMxc(url: string): { serverName: string; mediaId: string } | null {
-  const m = /^mxc:\/\/([^/]+)\/(.+)$/.exec(url);
-  return m ? { serverName: m[1], mediaId: m[2] } : null;
 }
 
 function useAuthedMedia(
@@ -36,24 +32,10 @@ function useAuthedMedia(
 
     (async () => {
       try {
-        const parsed = parseMxc(mxcUrl);
-        if (!parsed) return;
-        const baseUrl = (client as unknown as { baseUrl: string }).baseUrl;
-        const token = (client as unknown as { getAccessToken: () => string }).getAccessToken();
-        let url: string;
-        if (opts.thumbnail) {
-          url =
-            `${baseUrl}/_matrix/client/v1/media/thumbnail/` +
-            `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}` +
-            `?width=${opts.thumbnail.w}&height=${opts.thumbnail.h}&method=scale`;
-        } else {
-          url =
-            `${baseUrl}/_matrix/client/v1/media/download/` +
-            `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`;
-        }
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!r.ok) throw new Error(`media fetch failed: ${r.status}`);
-        const blob = await r.blob();
+        const thumbnail = opts.thumbnail
+          ? { width: opts.thumbnail.w, height: opts.thumbnail.h, method: "scale" as const }
+          : undefined;
+        const blob = await fetchAuthedMedia(client, mxcUrl, thumbnail);
         if (!revoked) {
           objectUrl = URL.createObjectURL(blob);
           setBlobUrl(objectUrl);
@@ -78,16 +60,13 @@ function DownloadButton({ mxcUrl, filename }: { mxcUrl: string; filename: string
   const client = useMatrixClient();
 
   async function handleDownload() {
-    const parsed = parseMxc(mxcUrl);
-    if (!parsed) return;
-    const baseUrl = (client as unknown as { baseUrl: string }).baseUrl;
-    const token = (client as unknown as { getAccessToken: () => string }).getAccessToken();
-    const url =
-      `${baseUrl}/_matrix/client/v1/media/download/` +
-      `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`;
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!r.ok) return;
-    const blob = await r.blob();
+    let blob: Blob;
+    try {
+      blob = await fetchAuthedMedia(client, mxcUrl);
+    } catch (err) {
+      console.warn("[media-message] download failed:", err);
+      return;
+    }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = filename;

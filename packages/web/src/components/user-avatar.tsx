@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { UserEvent } from "matrix-js-sdk";
+import { type RoomMember, RoomStateEvent, UserEvent } from "matrix-js-sdk";
 import { createAvatar } from "@dicebear/core";
 import { glass } from "@dicebear/collection";
 import { Avatar, AvatarBadge } from "@/components/ui/avatar";
 import { MatrixClientPeg } from "@/client/peg";
+import { useAuthedMediaUrl } from "@/lib/matrix/authed-media";
 import { cn } from "@/lib/utils";
 
 function avatarSeed(userId: string): string {
@@ -22,30 +23,30 @@ const PRESENCE_COLORS: Record<string, string> = {
   offline: "bg-zinc-500",
 };
 
-function useUserAvatarUrl(userId: string): string | null {
+/** The user's `mxc://` avatar, or null if they have none we know of yet. */
+function useUserAvatarMxc(userId: string): string | null {
   return useSyncExternalStore(
     (cb) => {
       const client = MatrixClientPeg.safeGet();
       const user = client?.getUser(userId);
       const unsubPeg = MatrixClientPeg.subscribe(cb);
-      if (!user) return unsubPeg;
       const onChange = () => cb();
-      user.on(UserEvent.AvatarUrl, onChange);
+      // UserEvent.AvatarUrl only fires for presence updates and for our own
+      // profile changes. Everyone else's avatar reaches the store through
+      // m.room.member events, whose User.setAvatarUrl() emits nothing — so
+      // watch room state too or a member's avatar stays stale until remount.
+      const onMembers = (_e: unknown, _s: unknown, member: RoomMember) => {
+        if (member.userId === userId) cb();
+      };
+      client?.on(RoomStateEvent.Members, onMembers);
+      user?.on(UserEvent.AvatarUrl, onChange);
       return () => {
-        user.off(UserEvent.AvatarUrl, onChange);
+        client?.off(RoomStateEvent.Members, onMembers);
+        user?.off(UserEvent.AvatarUrl, onChange);
         unsubPeg();
       };
     },
-    () => {
-      const client = MatrixClientPeg.safeGet();
-      const user = client?.getUser(userId);
-      if (!user?.avatarUrl) return null;
-      // getHttpUriForMxc returns "" (not null) for an empty/invalid mxc URL.
-      // Normalise to null with `||` so callers fall back cleanly — `?? null`
-      // would leak the empty string and render <img src=""> (Chrome shows its
-      // broken-image icon).
-      return client?.mxcUrlToHttp(user.avatarUrl, 64, 64, "crop") || null;
-    },
+    () => MatrixClientPeg.safeGet()?.getUser(userId)?.avatarUrl || null,
     () => null,
   );
 }
@@ -58,14 +59,16 @@ interface UserAvatarProps {
 }
 
 export function UserAvatar({ userId, size = "default", presence, className }: UserAvatarProps) {
-  const mxcSrc = useUserAvatarUrl(userId);
+  const mxc = useUserAvatarMxc(userId);
+  // Media is authenticated (Matrix 1.11+), so this is an object URL fetched
+  // with the access token, not a plain thumbnail link.
+  const mxcSrc = useAuthedMediaUrl(mxc, { width: 64, height: 64, method: "crop" });
   const fallbackSrc = useMemo(
     () => createAvatar(glass, { seed: avatarSeed(userId) }).toDataUri(),
     [userId],
   );
-  // Degrade to the generated avatar if the mxc thumbnail itself fails to load
-  // (e.g. 404 on authenticated media). Reset when the source changes so a newly
-  // uploaded avatar gets a fresh attempt.
+  // Degrade to the generated avatar if the thumbnail itself fails to load.
+  // Reset when the source changes so a newly uploaded avatar gets a fresh attempt.
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [mxcSrc]);
   // `||`, not `??`: an empty-string mxcSrc must also fall through to fallback.

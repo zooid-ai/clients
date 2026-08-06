@@ -36,6 +36,14 @@ export interface DaemonImpersonator {
   ): Promise<MatrixRoomEvent>;
   downloadMedia(mxcUri: string): Promise<Buffer>;
   sendText(roomId: string, body: string): Promise<void>;
+  /**
+   * Upload bytes and set them as the profile avatar of the identity this
+   * fixture actually writes as — which today is the AS's own sender_localpart
+   * user, not `agentUserId` (the `?user_id=` impersonation on `agentClient`
+   * isn't reaching the homeserver). Returns that user id so callers can assert
+   * against the sender they'll see in the timeline.
+   */
+  setAvatar(bytes: Buffer, mimetype?: string): Promise<{ userId: string; mxcUri: string }>;
 }
 
 export interface FreshHuman {
@@ -178,6 +186,38 @@ export const test = base.extend<{ daemon: DaemonImpersonator; human: FreshHuman 
         });
         if (!r.ok) throw new Error(`media download failed: ${r.status}`);
         return Buffer.from(await r.arrayBuffer());
+      },
+
+      async setAvatar(bytes, mimetype = "image/png") {
+        const who = await fetch(`${HS_URL}/_matrix/client/v3/account/whoami`, {
+          headers: { Authorization: `Bearer ${AS_TOKEN}` },
+        });
+        if (!who.ok) throw new Error(`whoami failed: ${who.status}`);
+        const { user_id: userId } = (await who.json()) as { user_id: string };
+
+        // Uploads stayed on the media/v3 path when Matrix 1.11 moved
+        // downloads behind authentication.
+        const up = await fetch(`${HS_URL}/_matrix/media/v3/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${AS_TOKEN}`, "Content-Type": mimetype },
+          body: new Uint8Array(bytes),
+        });
+        if (!up.ok) throw new Error(`avatar upload failed: ${up.status} ${await up.text()}`);
+        const { content_uri: mxcUri } = (await up.json()) as { content_uri: string };
+
+        const put = await fetch(
+          `${HS_URL}/_matrix/client/v3/profile/${encodeURIComponent(userId)}/avatar_url`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${AS_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ avatar_url: mxcUri }),
+          },
+        );
+        if (!put.ok) throw new Error(`avatar set failed: ${put.status} ${await put.text()}`);
+        return { userId, mxcUri };
       },
 
       async sendText(roomId, body) {
