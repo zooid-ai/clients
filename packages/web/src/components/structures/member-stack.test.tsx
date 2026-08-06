@@ -57,6 +57,24 @@ describe("<MemberStack>", () => {
     expect(screen.getByText("+2")).toBeInTheDocument();
   });
 
+  it("drops the digits past 9 so a big count can't break out of the circle", () => {
+    setupClient();
+    const members = Array.from({ length: 1003 }, (_, i) =>
+      member(`@u${i}:h`, `User ${String(i).padStart(4, "0")}`),
+    );
+    render(<MemberStack members={members} />);
+    expect(screen.getByRole("button", { name: /1003 members/i })).toBeInTheDocument();
+    expect(screen.getByText("+")).toBeInTheDocument();
+    expect(screen.queryByText("+1000")).toBeNull();
+  });
+
+  it("keeps the digits at the 9 boundary", () => {
+    setupClient();
+    const members = Array.from({ length: 12 }, (_, i) => member(`@u${i}:h`, `User ${i}`));
+    render(<MemberStack members={members} />);
+    expect(screen.getByText("+9")).toBeInTheDocument();
+  });
+
   it("shows no overflow chip when everyone fits", () => {
     setupClient();
     render(<MemberStack members={[member("@a:h", "Alice"), member("@b:h", "Bob")]} />);

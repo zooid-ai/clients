@@ -73,7 +73,10 @@ export function MemberStack({ members, open, onToggle }: MemberStackProps) {
               ))}
               {overflow > 0 && (
                 <AvatarGroupCount className={open ? "ring-foreground text-foreground" : undefined}>
-                  +{overflow}
+                  {/* Two glyphs is all the fixed-size circle holds — "+1000"
+                      breaks out of it. Past 9 the sign alone says "many more";
+                      the tooltip carries the exact count. */}
+                  {overflow > 9 ? "+" : `+${overflow}`}
                 </AvatarGroupCount>
               )}
             </AvatarGroup>

@@ -40,6 +40,16 @@ export const WithOverflow: Story = {
   args: { members: ROSTER },
 };
 
+// A big room: the overflow chip drops to a bare "+" rather than "+1000",
+// which would spill out of its circle. Exact count lives in the tooltip.
+export const LargeOverflow: Story = {
+  args: {
+    members: Array.from({ length: 1003 }, (_, i) =>
+      member(`user${i}`, `User ${String(i).padStart(4, "0")}`),
+    ),
+  },
+};
+
 // Exactly the stack size, no overflow chip.
 export const NoOverflow: Story = {
   args: { members: ROSTER.slice(0, 3) },
