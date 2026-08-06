@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { RoomEvent } from "matrix-js-sdk";
+import { RoomEvent, RoomStateEvent } from "matrix-js-sdk";
 import { createAvatar } from "@dicebear/core";
 import { shapes } from "@dicebear/collection";
 import { Avatar } from "@/components/ui/avatar";
 import { MatrixClientPeg } from "@/client/peg";
+import { useAuthedMediaUrl } from "@/lib/matrix/authed-media";
 import { cn } from "@/lib/utils";
 
-function useRoomAvatarUrl(roomId: string): string | null {
+/** The room's `mxc://` avatar, or null if it has none. */
+function useRoomAvatarMxc(roomId: string): string | null {
   return useSyncExternalStore(
     (cb) => {
       const room = MatrixClientPeg.safeGet()?.getRoom(roomId);
@@ -14,17 +16,15 @@ function useRoomAvatarUrl(roomId: string): string | null {
       if (!room) return unsubPeg;
       const onChange = () => cb();
       room.on(RoomEvent.Name, onChange);
+      // m.room.avatar lands as a state event, not a name change.
+      room.currentState.on(RoomStateEvent.Events, onChange);
       return () => {
         room.off(RoomEvent.Name, onChange);
+        room.currentState.off(RoomStateEvent.Events, onChange);
         unsubPeg();
       };
     },
-    () => {
-      const client = MatrixClientPeg.safeGet();
-      const mxc = client?.getRoom(roomId)?.getMxcAvatarUrl();
-      if (!mxc) return null;
-      return client?.mxcUrlToHttp(mxc, 64, 64, "crop") || null;
-    },
+    () => MatrixClientPeg.safeGet()?.getRoom(roomId)?.getMxcAvatarUrl() || null,
     () => null,
   );
 }
@@ -40,7 +40,8 @@ export function RoomAvatar({
   size?: "sm" | "default" | "lg";
   className?: string;
 }) {
-  const mxcSrc = useRoomAvatarUrl(roomId);
+  const mxc = useRoomAvatarMxc(roomId);
+  const mxcSrc = useAuthedMediaUrl(mxc, { width: 64, height: 64, method: "crop" });
   const fallbackSrc = useMemo(
     () => createAvatar(shapes, { seed: roomId }).toDataUri(),
     [roomId],
