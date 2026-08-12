@@ -8,6 +8,7 @@ import { SlashCommandList } from "./slash-command-list";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
 import { useThreadPreview } from "../../hooks/use-timeline";
+import { useTyping } from "../../hooks/use-typing";
 import { useMediaUpload, MAX_UPLOAD_BYTES } from "../../hooks/use-media-upload";
 
 const TEXTAREA_CLS =
@@ -53,6 +54,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
 
   const threadScoped = Boolean(threadRootEventId);
   const threadId = threadRootEventId ?? null;
+  const typingUserIds = useTyping(roomId);
 
   // Get the last message in the thread for the "Replying to" banner.
   // Always call the hook (avoids conditional hook rules); returns empty when rootEventId is ''.
@@ -255,6 +257,24 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     }
   }
 
+  async function stop(): Promise<void> {
+    if (!threadId) return;
+    const slash = parseSlashCommand("/stop", { threadScoped: true });
+    if (!slash) return;
+    setError(null);
+    try {
+      await (client.sendEvent as unknown as SendEvent).call(
+        client,
+        roomId,
+        threadId,
+        slash.eventType,
+        { ...slash.content, "m.relates_to": { rel_type: "m.thread", event_id: threadId } },
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   function handleAttachChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -325,14 +345,26 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
           ) : (
             <span className="shrink-0">Replying in current thread</span>
           )}
-          <button
-            type="button"
-            aria-label="Exit thread"
-            onClick={() => onExitThread?.()}
-            className="ml-auto shrink-0 rounded px-2 py-1 hover:bg-muted"
-          >
-            Cancel
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {typingUserIds.length > 0 && (
+              <button
+                type="button"
+                aria-label="Stop agent"
+                onClick={() => void stop()}
+                className="rounded px-2 py-1 hover:bg-muted"
+              >
+                Stop
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Exit thread"
+              onClick={() => onExitThread?.()}
+              className="rounded px-2 py-1 hover:bg-muted"
+            >
+              Exit thread
+            </button>
+          </div>
         </div>
       )}
       {ac && matches.length > 0 && (
