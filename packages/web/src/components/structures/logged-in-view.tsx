@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { MatrixClientPeg } from "../../client/peg";
 import { useActiveSpaceId } from "../../hooks/use-active-space-id";
+import { useJoinedSpaces } from "../../hooks/use-joined-spaces";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useUserName } from "../../hooks/use-user-name";
 import { LeftPanel } from "./left-panel";
@@ -43,7 +44,8 @@ export function LoggedInView() {
   const serverName = userId.split(":")[1] ?? userId;
   const spaceLocalpart =
     (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
-  const { spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
+  const { ready: workforceSpaceReady, spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
+  const joinedSpaces = useJoinedSpaces();
   const [scope, setScope] = useState<Scope | null>(null);
   const [rightPanel, setRightPanel] = useState<"home" | "people" | "notifications" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -57,8 +59,16 @@ export function LoggedInView() {
 
   useEffect(() => {
     if (scope) return;
-    if (spaceId) setScope({ kind: "space", spaceId });
-  }, [spaceId, scope]);
+    if (spaceId) {
+      setScope({ kind: "space", spaceId });
+      return;
+    }
+    // Workforce space didn't resolve — if the user only belongs to one
+    // space, scope to it instead of stranding them on Home (ZNC008).
+    if (workforceSpaceReady && joinedSpaces.length === 1) {
+      setScope({ kind: "space", spaceId: joinedSpaces[0].roomId });
+    }
+  }, [spaceId, scope, workforceSpaceReady, joinedSpaces]);
 
   const activeScope: Scope = scope ?? (spaceId ? { kind: "space", spaceId } : { kind: "home" });
 
