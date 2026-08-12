@@ -156,6 +156,35 @@ describe("<Composer /> thread mode", () => {
     expect(onExitThread).toHaveBeenCalled();
   });
 
+  it("hides the Stop button when nobody is typing", () => {
+    setup();
+    render(<Composer roomId={roomId} threadRootEventId="$root" onExitThread={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /stop agent/i })).toBeNull();
+  });
+
+  it("shows a Stop button while the agent is typing and sends the interrupt event on click", async () => {
+    const { client, send } = setup();
+    const room = client.getRoom(roomId) as unknown as {
+      currentState: { getMembers: () => RoomMember[] };
+    };
+    const agent = new RoomMember(roomId, "@agent:h.example");
+    agent.typing = true;
+    room.currentState.getMembers = () => [agent];
+
+    render(<Composer roomId={roomId} threadRootEventId="$root" onExitThread={vi.fn()} />);
+    const stopButton = screen.getByRole("button", { name: /stop agent/i });
+    const user = userEvent.setup();
+    await user.click(stopButton);
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith(
+        roomId,
+        "$root",
+        "dev.zooid.interrupt",
+        { "m.relates_to": { rel_type: "m.thread", event_id: "$root" } },
+      ),
+    );
+  });
+
   it("shows /clear in thread-mode slash autocomplete", async () => {
     setup();
     render(<Composer roomId={roomId} threadRootEventId="$root" />);
