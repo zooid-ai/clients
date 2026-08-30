@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import type { Room } from "matrix-js-sdk";
+import { Direction, RoomEvent, type Room } from "matrix-js-sdk";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   makeFakeClient,
@@ -283,6 +283,90 @@ describe("useTimeline across a gappy sync", () => {
     // timelineSupport the earlier events are gone from the timeline set.
     expect(result.current.events.map((e) => e.getContent().body)).toEqual(["three"]);
   });
+});
+
+describe("useTimeline gap detection", () => {
+  function seed(room: Room, bodies: string[]) {
+    for (const body of bodies) {
+      pushTimelineEvent(
+        room,
+        mkMatrixEvent({
+          roomId,
+          sender: "@a:h.example",
+          type: "m.room.message",
+          content: { msgtype: "m.text", body },
+        }),
+      );
+    }
+  }
+
+  function gappyRoom() {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    seed(room, ["one", "two"]);
+    // What sync does for a room that came back `limited: true`: fork a new
+    // timeline carrying a prev_batch, leaving the old one unjoined.
+    room.resetLiveTimeline("prev_batch_tok", "old_sync_tok");
+    seed(room, ["three", "four"]);
+    (client as unknown as { getRoom: () => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+    return { client, room };
+  }
+
+  it("reports no gaps for a room with one continuous timeline", () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    seed(room, ["one", "two"]);
+    (client as unknown as { getRoom: () => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    expect(result.current.gapBeforeEventIds).toEqual([]);
+  });
+
+  it("anchors a gap to the first event after the unjoined timeline", () => {
+    const { result } = renderHookOnGappyRoom();
+    const ids = result.current.events.map((e) => e.getId());
+    const bodies = result.current.events.map((e) => e.getContent().body);
+    // "three" is the first event of the forked timeline.
+    expect(bodies).toEqual(["one", "two", "three", "four"]);
+    expect(result.current.gapBeforeEventIds).toEqual([ids[2]]);
+  });
+
+  it("stops reporting the gap once the timelines are joined up", () => {
+    const { result, room } = renderHookOnGappyRoom();
+    expect(result.current.gapBeforeEventIds).toHaveLength(1);
+
+    act(() => {
+      // What paginating across the hole eventually does.
+      const [older, newer] = room.getUnfilteredTimelineSet().getTimelines();
+      newer.setNeighbouringTimeline(older, Direction.Backward);
+      newer.setPaginationToken(null, Direction.Backward);
+      room.emit(RoomEvent.TimelineReset, room, room.getUnfilteredTimelineSet(), false);
+    });
+
+    expect(result.current.gapBeforeEventIds).toEqual([]);
+  });
+
+  it("ignores the oldest timeline's own back-pagination token", () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    room.getLiveTimeline().setPaginationToken("start_of_history", Direction.Backward);
+    seed(room, ["one", "two"]);
+    (client as unknown as { getRoom: () => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    // That token means "there is older history", which the panel's own
+    // "Load more" header covers — it is not a hole in the middle.
+    const { result } = renderHook(() => useTimeline(roomId));
+    expect(result.current.gapBeforeEventIds).toEqual([]);
+  });
+
+  function renderHookOnGappyRoom() {
+    const { room } = gappyRoom();
+    const { result } = renderHook(() => useTimeline(roomId));
+    return { result, room };
+  }
 });
 
 describe("useThreadPreview", () => {

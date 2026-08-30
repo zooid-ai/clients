@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTimeline } from "../../hooks/use-timeline";
+import { useFillGap } from "../../hooks/use-fill-gap";
 import { useLoadMoreHistory } from "../../hooks/use-load-more-history";
 import { LoadMoreButton } from "../timeline/load-more-button";
 import { RoomBanner } from "./room-banner";
@@ -14,8 +15,9 @@ export function TimelinePanel({
   onReplyInThread?: (eventId: string) => void;
   onViewThread?: (eventId: string) => void;
 }) {
-  const { events, pendingRootIds } = useTimeline(roomId);
+  const { events, pendingRootIds, gapBeforeEventIds } = useTimeline(roomId);
   const { loadMore, loading, hasMore } = useLoadMoreHistory(roomId);
+  const { fillGap, pendingGapId } = useFillGap(roomId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
   const prefetchedRef = useRef<string | null>(null);
@@ -52,6 +54,9 @@ export function TimelinePanel({
       <MessagePanel
         events={events}
         pendingRootIds={pendingRootIds}
+        gapBeforeEventIds={gapBeforeEventIds}
+        pendingGapId={pendingGapId}
+        onFillGap={fillGap}
         onReplyInThread={onReplyInThread}
         onViewThread={onViewThread}
       />

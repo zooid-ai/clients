@@ -34,6 +34,10 @@ export function makeFakeClient(opts: FakeClientOpts): MatrixClient {
     supportsExperimentalThreads: () => false,
     isInitialSyncComplete: () => true,
     decryptEventIfNeeded: async () => undefined,
+    // TimelinePanel prefetches one page on mount, so any consumer that renders
+    // it needs this to exist. `false` = "no more history", the quiet default;
+    // tests asserting on pagination override it with their own spy.
+    paginateEventTimeline: async () => false,
     addRoom(room: Room) {
       rooms.set(room.roomId, room);
       emitter.emit(ClientEventName.Room, room);

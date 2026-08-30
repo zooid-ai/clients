@@ -6,8 +6,8 @@ import type { FreshHuman } from "./fixtures/daemon-impersonator";
  * Regression coverage for zooid-ai/zooid#14 — "random parts of the room
  * conversation loaded".
  *
- * Two distinct ways history went missing, both exercised here against a real
- * homeserver because neither is visible to a unit test:
+ * Three behaviours, all exercised against a real homeserver because none of
+ * them is visible to a unit test:
  *
  *  1. A gappy ("limited: true") sync made matrix-js-sdk reset the room's
  *     timeline set, and without `timelineSupport` that reset discarded every
@@ -16,6 +16,8 @@ import type { FreshHuman } from "./fixtures/daemon-impersonator";
  *  2. Opening a thread whose replies sat behind the sync window rendered
  *     almost nothing, and the "Load more" button was a no-op because it
  *     paginated a Thread object that never exists with thread support off.
+ *  3. The hole a gappy sync leaves behind is now marked where it actually is,
+ *     mid-conversation, and can be backfilled from there.
  */
 
 async function joinAsHuman(roomId: string, human: FreshHuman) {
@@ -109,4 +111,56 @@ test("thread replies behind the sync window are loaded when the thread opens", a
   });
   await expect(page.getByText("old-reply-8", { exact: true })).toBeVisible();
   await expect(page.getByText("newest-reply", { exact: true })).toBeVisible();
+});
+
+test("a gap in the middle of the conversation is marked and fillable in place", async ({
+  page,
+  human,
+  daemon,
+}) => {
+  const roomId = await daemon.createRoomWithHuman(human.userId);
+  await joinAsHuman(roomId, human);
+
+  for (let i = 1; i <= 20; i++) {
+    await daemon.sendText(roomId, `before-gap-${i}`);
+  }
+
+  await loginAndOpenRoom(page, human, roomId);
+  await expect(page.getByText("before-gap-1", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
+
+  await page.context().setOffline(true);
+  for (let i = 1; i <= 40; i++) {
+    await daemon.sendText(roomId, `missed-${i}`);
+  }
+  await page.context().setOffline(false);
+  await expect(page.getByText("missed-40", { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+
+  // The messages that arrived while offline are mostly absent, and the client
+  // knows exactly where the discontinuity is — so it says so, inline.
+  await expect(page.getByText("missed-2", { exact: true })).toHaveCount(0);
+  const gap = page.getByTestId("timeline-gap");
+  await expect(gap).toBeVisible();
+
+  // The marker sits between the two loaded stretches, not at the top of the
+  // panel: everything before it is older than the hole, everything after newer.
+  const gapY = (await gap.boundingBox())!.y;
+  const beforeY = (await page
+    .getByText("before-gap-20", { exact: true })
+    .boundingBox())!.y;
+  const afterY = (await page.getByText("missed-40", { exact: true }).boundingBox())!.y;
+  expect(beforeY).toBeLessThan(gapY);
+  expect(gapY).toBeLessThan(afterY);
+
+  await page.getByRole("button", { name: /load missing messages/i }).click();
+
+  await expect(page.getByText("missed-2", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText("missed-20", { exact: true })).toBeVisible();
+  // Hole closed, so the marker retires.
+  await expect(page.getByTestId("timeline-gap")).toHaveCount(0);
 });

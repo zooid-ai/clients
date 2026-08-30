@@ -1,5 +1,7 @@
 import {
   ClientEvent,
+  Direction,
+  type EventTimeline,
   type IEvent,
   type MatrixClient,
   MatrixEvent,
@@ -14,6 +16,12 @@ interface TimelineState {
   events: MatrixEvent[];
   /** Root event_ids referenced by thread replies that aren't yet in any local timeline. */
   pendingRootIds: string[];
+  /**
+   * Ids of rendered events that begin a stretch of timeline the SDK could not
+   * join to what came before it. Everything above such an event is older, but
+   * not adjacent — messages are missing in between and have to be paginated in.
+   */
+  gapBeforeEventIds: string[];
 }
 
 export interface ThreadPreviewState {
@@ -34,7 +42,7 @@ export interface ThreadFullState {
   totalCount: number;
 }
 
-const EMPTY: TimelineState = { events: [], pendingRootIds: [] };
+const EMPTY: TimelineState = { events: [], pendingRootIds: [], gapBeforeEventIds: [] };
 const THREAD_EMPTY: ThreadPreviewState = { events: [], totalCount: 0 };
 const THREAD_FULL_EMPTY: ThreadFullState = {
   root: undefined,
@@ -113,6 +121,37 @@ export function allRoomEvents(room: Room): MatrixEvent[] {
   return out;
 }
 
+/**
+ * Timelines that start after a hole in the room's history.
+ *
+ * A gappy ("limited: true") sync forks a new timeline and leaves the previous
+ * one in the set, unjoined — the events either side are contiguous once
+ * allRoomEvents() sorts them by timestamp, but there are messages missing in
+ * between. The SDK marks the boundary two ways: the later timeline has no
+ * backward neighbour (nothing has been paginated across yet) and it still
+ * carries a backward pagination token (there is something to fetch).
+ *
+ * The oldest timeline is excluded on purpose. It has both properties too, but
+ * its backward token is simply the start of loaded history — that is what the
+ * "Load more" button at the top of the panel is for, not a hole.
+ */
+function gapStartTimelines(room: Room): Set<EventTimeline> {
+  const timelines = room
+    .getUnfilteredTimelineSet()
+    .getTimelines()
+    .filter((tl) => tl.getEvents().length > 0)
+    .sort((a, b) => a.getEvents()[0].getTs() - b.getEvents()[0].getTs());
+
+  const out = new Set<EventTimeline>();
+  for (let i = 1; i < timelines.length; i++) {
+    const tl = timelines[i];
+    if (tl.getNeighbouringTimeline(Direction.Backward)) continue;
+    if (tl.getPaginationToken(Direction.Backward) === null) continue;
+    out.add(tl);
+  }
+  return out;
+}
+
 function snapshot(roomId: string): TimelineState {
   const client = MatrixClientPeg.safeGet();
   const room = client?.getRoom(roomId);
@@ -161,17 +200,38 @@ function snapshot(roomId: string): TimelineState {
 
   events.sort((a, b) => a.getTs() - b.getTs());
 
+  // Anchor each gap to the first *rendered* event of the timeline that follows
+  // it. The timeline's own first event may have been filtered out above (a
+  // thread reply or an edit), and anchoring to an event that never reaches the
+  // DOM would silently drop the marker.
+  const gapTimelines = gapStartTimelines(room);
+  const gapBeforeEventIds: string[] = [];
+  if (gapTimelines.size > 0) {
+    const timelineSet = room.getUnfilteredTimelineSet();
+    for (const ev of events) {
+      const id = ev.getId();
+      if (!id) continue;
+      const tl = timelineSet.getTimelineForEvent(id);
+      if (!tl || !gapTimelines.has(tl)) continue;
+      gapBeforeEventIds.push(id);
+      gapTimelines.delete(tl);
+      if (gapTimelines.size === 0) break;
+    }
+  }
+
   const cached = snapshotCache.get(room);
   if (
     cached &&
     cached.events.length === events.length &&
     cached.events[events.length - 1] === events[events.length - 1] &&
     cached.pendingRootIds.length === pendingRootIds.length &&
-    cached.pendingRootIds.every((id, i) => id === pendingRootIds[i])
+    cached.pendingRootIds.every((id, i) => id === pendingRootIds[i]) &&
+    cached.gapBeforeEventIds.length === gapBeforeEventIds.length &&
+    cached.gapBeforeEventIds.every((id, i) => id === gapBeforeEventIds[i])
   ) {
     return cached;
   }
-  const next = { events, pendingRootIds };
+  const next = { events, pendingRootIds, gapBeforeEventIds };
   snapshotCache.set(room, next);
   return next;
 }
