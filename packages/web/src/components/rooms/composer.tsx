@@ -1,5 +1,5 @@
-import { type KeyboardEvent, useMemo, useRef, useState } from "react";
-import { Paperclip, SendHorizontal, X } from "lucide-react";
+import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useMemo, useRef, useState } from "react";
+import { ImageUp, Paperclip, SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { displayNameOf, expandMentions, nameOfMember, senderColor } from "@/lib/sender";
 import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
@@ -9,7 +9,14 @@ import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
 import { useThreadPreview } from "../../hooks/use-timeline";
 import { useTyping } from "../../hooks/use-typing";
-import { useMediaUpload, MAX_UPLOAD_BYTES } from "../../hooks/use-media-upload";
+import { useMediaUpload } from "../../hooks/use-media-upload";
+import {
+  MAX_ATTACHMENTS,
+  nameClipboardFile,
+  stageFiles,
+  StagedAttachments,
+  type StagedAttachment,
+} from "./staged-attachments";
 
 const TEXTAREA_CLS =
   "field-sizing-content min-h-9 flex-1 bg-transparent px-2.5 py-2 text-base outline-none placeholder:text-muted-foreground resize-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
@@ -47,7 +54,10 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
   const [error, setError] = useState<string | null>(null);
   const [ac, setAc] = useState<AutocompleteState | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { upload, progress } = useMediaUpload();
@@ -187,11 +197,11 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
 
   async function send(): Promise<void> {
     const body = value.trim();
-    if (!body && !attachment) return;
+    if (!body && attachments.length === 0) return;
     setError(null);
     try {
       // Slash commands only apply when there's no attachment and the body starts with /
-      if (body && !attachment) {
+      if (body && attachments.length === 0) {
         const slash = parseSlashCommand(body, { threadScoped });
         if (slash) {
           // matrix-js-sdk auto-adds m.relates_to for m.room.message threaded
@@ -215,26 +225,38 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
         }
       }
 
-      // Send attachment first (before text), as per ZOD057 design
-      if (attachment) {
-        const { contentUri } = await upload(attachment);
-        const isImage = attachment.type.startsWith("image/");
-        const mediaContent: Record<string, unknown> = {
-          msgtype: isImage ? "m.image" : "m.file",
-          body: attachment.name,
-          url: contentUri,
-          info: { mimetype: attachment.type, size: attachment.size },
-        };
-        if (!isImage) mediaContent.filename = attachment.name;
-        await (client.sendEvent as unknown as SendEvent).call(
-          client,
-          roomId,
-          threadId,
-          "m.room.message",
-          mediaContent,
-        );
-        setAttachment(null);
-        if (attachInputRef.current) attachInputRef.current.value = "";
+      // Send attachments first (before text), as per ZOD057 design. Uploads run
+      // one at a time so the timeline order matches the tray order; anything
+      // still unsent when one fails stays staged for a retry.
+      if (attachments.length > 0) {
+        const pending = [...attachments];
+        try {
+          while (pending.length > 0) {
+            const { id, file } = pending[0];
+            setUploadingId(id);
+            const { contentUri } = await upload(file);
+            const isImage = file.type.startsWith("image/");
+            const mediaContent: Record<string, unknown> = {
+              msgtype: isImage ? "m.image" : "m.file",
+              body: file.name,
+              url: contentUri,
+              info: { mimetype: file.type, size: file.size },
+            };
+            if (!isImage) mediaContent.filename = file.name;
+            await (client.sendEvent as unknown as SendEvent).call(
+              client,
+              roomId,
+              threadId,
+              "m.room.message",
+              mediaContent,
+            );
+            pending.shift();
+          }
+        } finally {
+          setUploadingId(null);
+          setAttachments(pending);
+          if (pending.length === 0 && attachInputRef.current) attachInputRef.current.value = "";
+        }
       }
 
       if (body) {
@@ -275,16 +297,73 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     }
   }
 
+  /** Single entry point for every way a file can reach the tray. */
+  function addFiles(files: File[]) {
+    if (files.length === 0) return;
+    setAttachments((current) => {
+      const { staged, error: stageError } = stageFiles(current, files);
+      setError(stageError);
+      return staged;
+    });
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((a) => a.id !== id));
+    if (attachInputRef.current) attachInputRef.current.value = "";
+  }
+
   function handleAttachChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError("Attachments are limited to 0.5 MB");
-      e.target.value = "";
-      return;
+    addFiles(Array.from(e.target.files ?? []));
+    e.target.value = "";
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    // No files on the clipboard: an ordinary text paste, leave it to the browser.
+    if (files.length === 0) return;
+    e.preventDefault();
+    addFiles(files.map((f) => nameClipboardFile(f)));
+  }
+
+  /**
+   * Dragged text or a link also fires these events; only a drag carrying files
+   * should light up the drop target or be swallowed by preventDefault().
+   */
+  function isFileDrag(e: DragEvent): boolean {
+    return Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  }
+
+  function handleDragEnter(e: DragEvent) {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+
+  function handleDragOver(e: DragEvent) {
+    if (!isFileDrag(e)) return;
+    // Without this the browser navigates to the dropped file.
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    if (!isFileDrag(e)) return;
+    // Moving between child elements fires leave/enter pairs; count depth so the
+    // highlight only clears when the pointer leaves the composer itself.
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setDragging(false);
     }
-    setError(null);
-    setAttachment(file);
+  }
+
+  function handleDrop(e: DragEvent) {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    addFiles(Array.from(e.dataTransfer?.files ?? []));
   }
 
   const onKeyDown = async (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -327,7 +406,19 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
   };
 
   return (
-    <div className="relative shrink-0 p-3">
+    <div
+      className="relative shrink-0 p-3"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-1 z-10 flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-ring bg-background/90 text-sm text-muted-foreground">
+          <ImageUp className="h-5 w-5" />
+          <span>Drop to attach — up to {MAX_ATTACHMENTS} files, 0.5 MB each</span>
+        </div>
+      )}
       {error && (
         <div role="alert" className="mb-2 text-sm text-destructive">
           {error}
@@ -407,32 +498,17 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
           )}
         </div>
       )}
-      {attachment && (
-        <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1 text-sm">
-          <span className="truncate">{attachment.name}</span>
-          {progress > 0 && progress < 1 && (
-            <div
-              className="h-1 shrink-0 rounded-full bg-primary"
-              style={{ width: `${Math.round(progress * 100)}%` }}
-            />
-          )}
-          <button
-            type="button"
-            aria-label="Remove attachment"
-            onClick={() => {
-              setAttachment(null);
-              if (attachInputRef.current) attachInputRef.current.value = "";
-            }}
-            className="ml-auto shrink-0 rounded p-0.5 hover:bg-muted"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      )}
+      <StagedAttachments
+        attachments={attachments}
+        uploadingId={uploadingId}
+        progress={progress}
+        onRemove={removeAttachment}
+      />
       <div className={INPUT_WRAPPER_CLS}>
         <input
           ref={attachInputRef}
           type="file"
+          multiple
           aria-label="Attach file"
           className="sr-only"
           onChange={handleAttachChange}
@@ -469,13 +545,14 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
           }}
           onBlur={() => setAc(null)}
           onKeyDown={onKeyDown}
+          onPaste={handlePaste}
           rows={1}
           className={cn(TEXTAREA_CLS)}
         />
         <button
           type="button"
           onClick={() => void send()}
-          disabled={!value.trim() && !attachment}
+          disabled={!value.trim() && attachments.length === 0}
           aria-label="Send message"
           className="shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RoomMember } from "matrix-js-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -333,5 +333,174 @@ describe("<Composer /> attachments", () => {
         info: { mimetype: "application/pdf", size: 2048 },
       }),
     );
+  });
+});
+
+describe("<Composer /> paste, drag-and-drop and the attachment tray", () => {
+  function setupWithUpload() {
+    const send = vi.fn().mockResolvedValue({ event_id: "$m1" });
+    const uploadContent = vi
+      .fn()
+      .mockImplementation((f: File) =>
+        Promise.resolve({ content_uri: `mxc://hs/${f.name}` }),
+      );
+    const { client } = setup(send);
+    (client as unknown as { uploadContent: unknown }).uploadContent = uploadContent;
+    return { send, uploadContent };
+  }
+
+  function png(bytes: number, name = "shot.png"): File {
+    return new File([new Uint8Array(bytes)], name, { type: "image/png" });
+  }
+
+  /** happy-dom has no object-URL support; the chip only needs a string back. */
+  function stubObjectUrls() {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  }
+
+  /** The composer root is the element carrying the drag/drop handlers. */
+  function renderComposer(): HTMLElement {
+    const { container } = render(<Composer roomId={roomId} />);
+    return container.firstElementChild as HTMLElement;
+  }
+
+  function fileDrag(files: File[]) {
+    return {
+      dataTransfer: {
+        files,
+        items: files.map((f) => ({ kind: "file", type: f.type, getAsFile: () => f })),
+        types: ["Files"],
+      },
+    };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stages an image pasted from the clipboard and renames the generic clipboard name", async () => {
+    stubObjectUrls();
+    setupWithUpload();
+    render(<Composer roomId={roomId} />);
+    const input = screen.getByRole("textbox", { name: /message/i });
+
+    fireEvent.paste(input, { clipboardData: { files: [png(1024, "image.png")], types: ["Files"] } });
+
+    const tray = await screen.findByRole("list", { name: /staged attachments/i });
+    expect(within(tray).getByText(/^pasted-\d{8}-\d{6}\.png$/)).toBeDefined();
+  });
+
+  it("leaves a plain text paste to the browser", async () => {
+    setupWithUpload();
+    render(<Composer roomId={roomId} />);
+    const input = screen.getByRole("textbox", { name: /message/i });
+
+    const evt = fireEvent.paste(input, { clipboardData: { files: [], types: ["text/plain"] } });
+
+    expect(evt).toBe(true); // not preventDefault()-ed
+    expect(screen.queryByRole("list", { name: /staged attachments/i })).toBeNull();
+  });
+
+  it("keeps the real filename of a file pasted from the file manager", async () => {
+    stubObjectUrls();
+    setupWithUpload();
+    render(<Composer roomId={roomId} />);
+
+    fireEvent.paste(screen.getByRole("textbox", { name: /message/i }), {
+      clipboardData: { files: [png(1024, "diagram.png")], types: ["Files"] },
+    });
+
+    expect(await screen.findByText("diagram.png")).toBeDefined();
+  });
+
+  it("stages files dropped onto the composer and shows a drop target while dragging", async () => {
+    stubObjectUrls();
+    setupWithUpload();
+    const composer = renderComposer();
+
+    fireEvent.dragEnter(composer, fileDrag([png(1024, "a.png")]));
+    expect(screen.getByText(/drop to attach/i)).toBeDefined();
+
+    fireEvent.drop(composer, fileDrag([png(1024, "a.png"), png(2048, "b.png")]));
+
+    expect(screen.queryByText(/drop to attach/i)).toBeNull();
+    const tray = await screen.findByRole("list", { name: /staged attachments/i });
+    expect(within(tray).getByText("a.png")).toBeDefined();
+    expect(within(tray).getByText("b.png")).toBeDefined();
+  });
+
+  it("ignores a drag that carries no files", () => {
+    setupWithUpload();
+    const composer = renderComposer();
+
+    fireEvent.dragEnter(composer, { dataTransfer: { files: [], items: [], types: ["text/plain"] } });
+
+    expect(screen.queryByText(/drop to attach/i)).toBeNull();
+  });
+
+  it("uploads and sends each staged attachment in tray order, then the text", async () => {
+    stubObjectUrls();
+    const { send, uploadContent } = setupWithUpload();
+    const composer = renderComposer();
+    const user = userEvent.setup();
+
+    fireEvent.drop(composer, fileDrag([png(1024, "a.png"), png(2048, "b.png")]));
+    await screen.findByRole("list", { name: /staged attachments/i });
+
+    await user.type(screen.getByRole("textbox", { name: /message/i }), "two shots{Enter}");
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(3));
+    expect(uploadContent).toHaveBeenCalledTimes(2);
+    const bodies = send.mock.calls.map(
+      (c) => (c as [unknown, unknown, unknown, Record<string, unknown>])[3],
+    );
+    expect(bodies[0]).toMatchObject({ msgtype: "m.image", body: "a.png", url: "mxc://hs/a.png" });
+    expect(bodies[1]).toMatchObject({ msgtype: "m.image", body: "b.png", url: "mxc://hs/b.png" });
+    expect(bodies[2]).toMatchObject({ msgtype: "m.text", body: "two shots" });
+    expect(screen.queryByRole("list", { name: /staged attachments/i })).toBeNull();
+  });
+
+  it("removes a single attachment from the tray and leaves the rest staged", async () => {
+    stubObjectUrls();
+    setupWithUpload();
+    const composer = renderComposer();
+    const user = userEvent.setup();
+
+    fireEvent.drop(composer, fileDrag([png(1024, "a.png"), png(2048, "b.png")]));
+    const tray = await screen.findByRole("list", { name: /staged attachments/i });
+
+    await user.click(within(tray).getByRole("button", { name: /remove a\.png/i }));
+
+    expect(screen.queryByText("a.png")).toBeNull();
+    expect(screen.getByText("b.png")).toBeDefined();
+  });
+
+  it("accepts the files that fit and reports the ones that do not", async () => {
+    stubObjectUrls();
+    setupWithUpload();
+    const composer = renderComposer();
+
+    fireEvent.drop(composer, fileDrag([png(1024, "ok.png"), png(524_289, "huge.png")]));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/0\.5\s?MB/i));
+    const tray = screen.getByRole("list", { name: /staged attachments/i });
+    expect(within(tray).getByText("ok.png")).toBeDefined();
+    expect(within(tray).queryByText("huge.png")).toBeNull();
+  });
+
+  it("caps the tray at 8 attachments", async () => {
+    stubObjectUrls();
+    setupWithUpload();
+    const composer = renderComposer();
+
+    fireEvent.drop(
+      composer,
+      fileDrag(Array.from({ length: 10 }, (_, i) => png(512, `f${i}.png`))),
+    );
+
+    const tray = await screen.findByRole("list", { name: /staged attachments/i });
+    expect(within(tray).getAllByRole("listitem")).toHaveLength(8);
+    expect(screen.getByRole("alert")).toHaveTextContent(/no more than 8 attachments/i);
   });
 });
