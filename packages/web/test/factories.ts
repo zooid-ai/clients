@@ -34,6 +34,10 @@ export function makeFakeClient(opts: FakeClientOpts): MatrixClient {
     supportsExperimentalThreads: () => false,
     isInitialSyncComplete: () => true,
     decryptEventIfNeeded: async () => undefined,
+    // TimelinePanel prefetches one page on mount, so any consumer that renders
+    // it needs this to exist. `false` = "no more history", the quiet default;
+    // tests asserting on pagination override it with their own spy.
+    paginateEventTimeline: async () => false,
     addRoom(room: Room) {
       rooms.set(room.roomId, room);
       emitter.emit(ClientEventName.Room, room);
@@ -55,9 +59,18 @@ export function makeRoom(
     myUserId: string;
     powerLevels?: Record<string, number>;
     usersDefault?: number;
+    /**
+     * Mirrors the `timelineSupport` flag createClient() is given in prod.
+     * It decides whether EventTimelineSet.resetLiveTimeline() keeps the old
+     * timeline (true) or discards every loaded event (false), so any test
+     * about gappy-sync history retention has to set it explicitly.
+     */
+    timelineSupport?: boolean;
   },
 ): Room {
-  const room = new Room(roomId, opts.client, opts.myUserId);
+  const room = new Room(roomId, opts.client, opts.myUserId, {
+    timelineSupport: opts.timelineSupport ?? false,
+  });
   // Seed a power_levels state event so tests don't blow up on null state.
   const pl = mkMatrixEvent({
     roomId,

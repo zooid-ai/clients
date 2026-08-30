@@ -1,5 +1,7 @@
 import {
   ClientEvent,
+  Direction,
+  type EventTimeline,
   type IEvent,
   type MatrixClient,
   MatrixEvent,
@@ -14,6 +16,12 @@ interface TimelineState {
   events: MatrixEvent[];
   /** Root event_ids referenced by thread replies that aren't yet in any local timeline. */
   pendingRootIds: string[];
+  /**
+   * Ids of rendered events that begin a stretch of timeline the SDK could not
+   * join to what came before it. Everything above such an event is older, but
+   * not adjacent — messages are missing in between and have to be paginated in.
+   */
+  gapBeforeEventIds: string[];
 }
 
 export interface ThreadPreviewState {
@@ -34,7 +42,7 @@ export interface ThreadFullState {
   totalCount: number;
 }
 
-const EMPTY: TimelineState = { events: [], pendingRootIds: [] };
+const EMPTY: TimelineState = { events: [], pendingRootIds: [], gapBeforeEventIds: [] };
 const THREAD_EMPTY: ThreadPreviewState = { events: [], totalCount: 0 };
 const THREAD_FULL_EMPTY: ThreadFullState = {
   root: undefined,
@@ -93,7 +101,10 @@ function ensureRootFetched(client: MatrixClient, roomId: string, eventId: string
 
 export function allRoomEvents(room: Room): MatrixEvent[] {
   // getLiveTimeline() only covers the current window. After a limited sync,
-  // older events live in historical timelines within the same set.
+  // older events live in historical timelines within the same set — which is
+  // true only because the peg creates the client with timelineSupport: true.
+  // Without it the SDK drops those timelines outright and this loop would
+  // never see more than one.
   const timelineSet = room.getUnfilteredTimelineSet();
   const seen = new Set<string>();
   const out: MatrixEvent[] = [];
@@ -107,6 +118,37 @@ export function allRoomEvents(room: Room): MatrixEvent[] {
     }
   }
   out.sort((a, b) => a.getTs() - b.getTs());
+  return out;
+}
+
+/**
+ * Timelines that start after a hole in the room's history.
+ *
+ * A gappy ("limited: true") sync forks a new timeline and leaves the previous
+ * one in the set, unjoined — the events either side are contiguous once
+ * allRoomEvents() sorts them by timestamp, but there are messages missing in
+ * between. The SDK marks the boundary two ways: the later timeline has no
+ * backward neighbour (nothing has been paginated across yet) and it still
+ * carries a backward pagination token (there is something to fetch).
+ *
+ * The oldest timeline is excluded on purpose. It has both properties too, but
+ * its backward token is simply the start of loaded history — that is what the
+ * "Load more" button at the top of the panel is for, not a hole.
+ */
+function gapStartTimelines(room: Room): Set<EventTimeline> {
+  const timelines = room
+    .getUnfilteredTimelineSet()
+    .getTimelines()
+    .filter((tl) => tl.getEvents().length > 0)
+    .sort((a, b) => a.getEvents()[0].getTs() - b.getEvents()[0].getTs());
+
+  const out = new Set<EventTimeline>();
+  for (let i = 1; i < timelines.length; i++) {
+    const tl = timelines[i];
+    if (tl.getNeighbouringTimeline(Direction.Backward)) continue;
+    if (tl.getPaginationToken(Direction.Backward) === null) continue;
+    out.add(tl);
+  }
   return out;
 }
 
@@ -158,17 +200,38 @@ function snapshot(roomId: string): TimelineState {
 
   events.sort((a, b) => a.getTs() - b.getTs());
 
+  // Anchor each gap to the first *rendered* event of the timeline that follows
+  // it. The timeline's own first event may have been filtered out above (a
+  // thread reply or an edit), and anchoring to an event that never reaches the
+  // DOM would silently drop the marker.
+  const gapTimelines = gapStartTimelines(room);
+  const gapBeforeEventIds: string[] = [];
+  if (gapTimelines.size > 0) {
+    const timelineSet = room.getUnfilteredTimelineSet();
+    for (const ev of events) {
+      const id = ev.getId();
+      if (!id) continue;
+      const tl = timelineSet.getTimelineForEvent(id);
+      if (!tl || !gapTimelines.has(tl)) continue;
+      gapBeforeEventIds.push(id);
+      gapTimelines.delete(tl);
+      if (gapTimelines.size === 0) break;
+    }
+  }
+
   const cached = snapshotCache.get(room);
   if (
     cached &&
     cached.events.length === events.length &&
     cached.events[events.length - 1] === events[events.length - 1] &&
     cached.pendingRootIds.length === pendingRootIds.length &&
-    cached.pendingRootIds.every((id, i) => id === pendingRootIds[i])
+    cached.pendingRootIds.every((id, i) => id === pendingRootIds[i]) &&
+    cached.gapBeforeEventIds.length === gapBeforeEventIds.length &&
+    cached.gapBeforeEventIds.every((id, i) => id === gapBeforeEventIds[i])
   ) {
     return cached;
   }
-  const next = { events, pendingRootIds };
+  const next = { events, pendingRootIds, gapBeforeEventIds };
   snapshotCache.set(room, next);
   return next;
 }
@@ -266,16 +329,27 @@ export function makeSubscribe(roomId: string) {
     const onRoom = (room: Room) => {
       if (room.roomId === roomId) cb();
     };
+    // A gappy sync makes the SDK rebuild the timeline set without emitting a
+    // single Timeline event. Without this listener the store keeps serving a
+    // snapshot of events that are no longer in the room, then collapses at
+    // whatever unrelated event happens to arrive next.
+    const onTimelineReset = (room?: Room) => {
+      if (room?.roomId === roomId) cb();
+    };
     client.on(RoomEvent.Timeline, onTimeline);
+    client.on(RoomEvent.TimelineReset, onTimelineReset);
     client.on(ClientEvent.Room, onRoom);
     const room = client.getRoom(roomId);
     room?.on(RoomEvent.Timeline, onTimeline);
+    room?.on(RoomEvent.TimelineReset, onTimelineReset);
     fetchSubscribers.add(cb);
     const unsubPeg = MatrixClientPeg.subscribe(cb);
     return () => {
       client.off(RoomEvent.Timeline, onTimeline);
+      client.off(RoomEvent.TimelineReset, onTimelineReset);
       client.off(ClientEvent.Room, onRoom);
       room?.off(RoomEvent.Timeline, onTimeline);
+      room?.off(RoomEvent.TimelineReset, onTimelineReset);
       fetchSubscribers.delete(cb);
       unsubPeg();
     };
