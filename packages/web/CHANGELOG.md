@@ -1,5 +1,16 @@
 # @zooid/zoon-web
 
+## 0.10.0
+
+### Minor Changes
+
+- Room and thread reliability and navigation improvements:
+
+  - Fix room history getting lost after idle gaps and inside threads.
+  - Auto-select the sole joined space when the workforce space doesn't resolve.
+  - Clarify the thread-exit button and add a typing-gated Stop button.
+  - Pin Playwright to one version and repair the rotted e2e specs.
+
 ## 0.9.1
 
 ### Patch Changes
