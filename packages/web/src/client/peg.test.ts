@@ -24,6 +24,15 @@ describe("MatrixClientPeg", () => {
     expect(onChange).toHaveBeenCalledOnce();
   });
 
+  // Without timelineSupport, EventTimelineSet.resetLiveTimeline() throws away
+  // every loaded event on any gappy sync, so a backgrounded tab comes back to
+  // a timeline with a silent hole in it (zooid-ai/zooid#14).
+  it("enables timelineSupport so a gappy sync doesn't discard loaded history", () => {
+    MatrixClientPeg.set(creds);
+    const c = MatrixClientPeg.safeGet()! as unknown as { timelineSupport: boolean };
+    expect(c.timelineSupport).toBe(true);
+  });
+
   it("reset() stops the client and clears the peg", () => {
     MatrixClientPeg.set(creds);
     const c = MatrixClientPeg.safeGet()!;

@@ -93,7 +93,10 @@ function ensureRootFetched(client: MatrixClient, roomId: string, eventId: string
 
 export function allRoomEvents(room: Room): MatrixEvent[] {
   // getLiveTimeline() only covers the current window. After a limited sync,
-  // older events live in historical timelines within the same set.
+  // older events live in historical timelines within the same set — which is
+  // true only because the peg creates the client with timelineSupport: true.
+  // Without it the SDK drops those timelines outright and this loop would
+  // never see more than one.
   const timelineSet = room.getUnfilteredTimelineSet();
   const seen = new Set<string>();
   const out: MatrixEvent[] = [];
@@ -266,16 +269,27 @@ export function makeSubscribe(roomId: string) {
     const onRoom = (room: Room) => {
       if (room.roomId === roomId) cb();
     };
+    // A gappy sync makes the SDK rebuild the timeline set without emitting a
+    // single Timeline event. Without this listener the store keeps serving a
+    // snapshot of events that are no longer in the room, then collapses at
+    // whatever unrelated event happens to arrive next.
+    const onTimelineReset = (room?: Room) => {
+      if (room?.roomId === roomId) cb();
+    };
     client.on(RoomEvent.Timeline, onTimeline);
+    client.on(RoomEvent.TimelineReset, onTimelineReset);
     client.on(ClientEvent.Room, onRoom);
     const room = client.getRoom(roomId);
     room?.on(RoomEvent.Timeline, onTimeline);
+    room?.on(RoomEvent.TimelineReset, onTimelineReset);
     fetchSubscribers.add(cb);
     const unsubPeg = MatrixClientPeg.subscribe(cb);
     return () => {
       client.off(RoomEvent.Timeline, onTimeline);
+      client.off(RoomEvent.TimelineReset, onTimelineReset);
       client.off(ClientEvent.Room, onRoom);
       room?.off(RoomEvent.Timeline, onTimeline);
+      room?.off(RoomEvent.TimelineReset, onTimelineReset);
       fetchSubscribers.delete(cb);
       unsubPeg();
     };

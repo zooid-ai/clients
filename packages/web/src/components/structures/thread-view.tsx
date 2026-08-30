@@ -6,6 +6,13 @@ import { EventTile } from "../timeline/event-tile";
 import { LoadMoreButton } from "../timeline/load-more-button";
 
 const PREFETCH_THRESHOLD = 5;
+/**
+ * With thread support off the replies live in the main room timeline, so an
+ * old thread's replies can sit well behind the sync window — one page of 50
+ * often isn't enough to reach them. Walk back a few pages, but bounded, so a
+ * thread whose totalCount we can never satisfy doesn't paginate the whole room.
+ */
+const MAX_PREFETCH_PAGES = 5;
 
 function MessageSkeleton() {
   return (
@@ -29,11 +36,15 @@ export function ThreadView({
   onBack: () => void;
 }) {
   const { root, rootPending, events, totalCount } = useThread(roomId, rootEventId);
-  const { loadMore, loading } = useLoadMoreThread(roomId, rootEventId);
-  const hasMore = events.length < totalCount;
+  const { loadMore, loading, hasMore: canPaginate } = useLoadMoreThread(roomId, rootEventId);
+  // Two conditions, both required: the server says replies are outstanding,
+  // and there's somewhere left to paginate from. Offering the button on the
+  // first alone leaves a dead control on screen once we've reached the start
+  // of the room and still can't account for every reply.
+  const hasMore = events.length < totalCount && canPaginate;
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
-  const prefetchedRef = useRef<string | null>(null);
+  const prefetchPagesRef = useRef<{ key: string; pages: number }>({ key: "", pages: 0 });
 
   function onScroll() {
     const el = scrollRef.current;
@@ -47,20 +58,23 @@ export function ThreadView({
     el.scrollTop = el.scrollHeight;
   }, [events]);
 
-  // One-shot prefetch on thread open: if the rendered reply count is below the
-  // threshold and the server says there are more, walk back one page so the
-  // user doesn't land on a near-empty thread when older replies exist.
+  // Prefetch on thread open: if the rendered reply count is below the
+  // threshold and the server says there are more, walk back a page at a time
+  // so the user doesn't land on a near-empty thread when older replies exist.
+  // Bounded by MAX_PREFETCH_PAGES; past that it's the user's call via the
+  // button.
   useEffect(() => {
     const key = `${roomId}:${rootEventId}`;
-    if (prefetchedRef.current === key) return;
-    if (events.length === 0 && rootPending) return; // wait for thread to materialize
-    if (hasMore && events.length < PREFETCH_THRESHOLD) {
-      prefetchedRef.current = key;
-      void loadMore();
-    } else if (!hasMore || events.length >= PREFETCH_THRESHOLD) {
-      prefetchedRef.current = key;
+    if (prefetchPagesRef.current.key !== key) {
+      prefetchPagesRef.current = { key, pages: 0 };
     }
-  }, [roomId, rootEventId, hasMore, events.length, rootPending, loadMore]);
+    if (events.length === 0 && rootPending) return; // wait for thread to materialize
+    if (loading) return;
+    if (!hasMore || events.length >= PREFETCH_THRESHOLD) return;
+    if (prefetchPagesRef.current.pages >= MAX_PREFETCH_PAGES) return;
+    prefetchPagesRef.current.pages += 1;
+    void loadMore();
+  }, [roomId, rootEventId, hasMore, events.length, rootPending, loading, loadMore]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -79,9 +93,11 @@ export function ThreadView({
         </span>
       </header>
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto">
-        {events.length > 0 && (
-          <LoadMoreButton loading={loading} hasMore={hasMore} onClick={loadMore} />
-        )}
+        {/* Not gated on events.length: a thread whose replies are all behind
+            the sync window renders zero of them, and that is exactly when the
+            user needs the button. LoadMoreButton hides itself when idle with
+            nothing more to fetch. */}
+        <LoadMoreButton loading={loading} hasMore={hasMore} onClick={loadMore} />
         <ol className="flex flex-col gap-0.5 px-4 py-3">
           {root ? (
             <li className="contents">

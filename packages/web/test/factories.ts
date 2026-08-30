@@ -55,9 +55,18 @@ export function makeRoom(
     myUserId: string;
     powerLevels?: Record<string, number>;
     usersDefault?: number;
+    /**
+     * Mirrors the `timelineSupport` flag createClient() is given in prod.
+     * It decides whether EventTimelineSet.resetLiveTimeline() keeps the old
+     * timeline (true) or discards every loaded event (false), so any test
+     * about gappy-sync history retention has to set it explicitly.
+     */
+    timelineSupport?: boolean;
   },
 ): Room {
-  const room = new Room(roomId, opts.client, opts.myUserId);
+  const room = new Room(roomId, opts.client, opts.myUserId, {
+    timelineSupport: opts.timelineSupport ?? false,
+  });
   // Seed a power_levels state event so tests don't blow up on null state.
   const pl = mkMatrixEvent({
     roomId,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Direction, RoomEvent } from "matrix-js-sdk";
+import { ClientEvent, Direction, type Room, RoomEvent } from "matrix-js-sdk";
 import { MatrixClientPeg } from "../client/peg";
 
 interface State {
@@ -32,19 +32,51 @@ export function useLoadMoreHistory(roomId: string, limit = 50) {
   // may flip from false → true; after the user paginates to the start we'll
   // flip true → false via the paginate result below.
   useEffect(() => {
-    setState((s) => ({ ...s, hasMore: snapshotHasMore(roomId) }));
     const client = MatrixClientPeg.safeGet();
-    const room = client?.getRoom(roomId);
-    if (!client || !room) return;
-    const onTimeline = () => {
+    if (!client) return;
+
+    const sync = () => {
       setState((s) => {
         const next = snapshotHasMore(roomId);
         return next === s.hasMore ? s : { ...s, hasMore: next };
       });
     };
-    room.on(RoomEvent.Timeline, onTimeline);
+
+    let attached: Room | null = null;
+    const detach = () => {
+      attached?.off(RoomEvent.Timeline, sync);
+      attached?.off(RoomEvent.TimelineReset, sync);
+      attached = null;
+    };
+    const attach = (room: Room) => {
+      if (attached === room) return;
+      detach();
+      attached = room;
+      room.on(RoomEvent.Timeline, sync);
+      // A gappy sync swaps the live timeline for a fresh one carrying a new
+      // prev_batch, without emitting a single Timeline event.
+      room.on(RoomEvent.TimelineReset, sync);
+    };
+
+    // Navigating straight to /room/:roomId after login routinely mounts this
+    // before sync has delivered the room. Bailing out permanently in that case
+    // left hasMore stuck at false for the life of the mount — no prefetch, and
+    // no "Load more" button to recover with, so the timeline stayed pinned to
+    // whatever the initial sync window happened to contain (zooid-ai/zooid#14).
+    const onRoom = (room: Room) => {
+      if (room.roomId !== roomId) return;
+      attach(room);
+      sync();
+    };
+    client.on(ClientEvent.Room, onRoom);
+
+    const existing = client.getRoom(roomId);
+    if (existing) attach(existing);
+    sync();
+
     return () => {
-      room.off(RoomEvent.Timeline, onTimeline);
+      client.off(ClientEvent.Room, onRoom);
+      detach();
     };
   }, [roomId]);
 

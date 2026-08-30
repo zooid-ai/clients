@@ -35,7 +35,10 @@ export interface DaemonImpersonator {
     timeoutMs?: number,
   ): Promise<MatrixRoomEvent>;
   downloadMedia(mxcUri: string): Promise<Buffer>;
-  sendText(roomId: string, body: string): Promise<void>;
+  /** Sends a plain m.text message and returns its event_id. */
+  sendText(roomId: string, body: string): Promise<string>;
+  /** Sends an m.text message related to `rootEventId` via m.thread. */
+  sendThreadReply(roomId: string, rootEventId: string, body: string): Promise<string>;
   /**
    * Upload bytes and set them as the profile avatar of the identity this
    * fixture actually writes as — which today is the AS's own sender_localpart
@@ -221,7 +224,7 @@ export const test = base.extend<{ daemon: DaemonImpersonator; human: FreshHuman 
       },
 
       async sendText(roomId, body) {
-        await (agentClient.sendEvent as (
+        const res = await (agentClient.sendEvent as (
           roomId: string,
           type: string,
           content: Record<string, unknown>,
@@ -229,6 +232,20 @@ export const test = base.extend<{ daemon: DaemonImpersonator; human: FreshHuman 
           msgtype: "m.text",
           body,
         });
+        return res.event_id;
+      },
+
+      async sendThreadReply(roomId, rootEventId, body) {
+        const res = await (agentClient.sendEvent as (
+          roomId: string,
+          type: string,
+          content: Record<string, unknown>,
+        ) => Promise<{ event_id: string }>)(roomId, "m.room.message", {
+          msgtype: "m.text",
+          body,
+          "m.relates_to": { rel_type: "m.thread", event_id: rootEventId },
+        });
+        return res.event_id;
       },
     };
 

@@ -1,4 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
+import type { Room } from "matrix-js-sdk";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   makeFakeClient,
@@ -190,6 +191,97 @@ describe("useTimeline", () => {
     const { result } = renderHook(() => useTimeline(roomId));
     expect(result.current.events).toHaveLength(1);
     expect(result.current.events[0].getContent().body).toBe("root");
+  });
+});
+
+// A gappy ("limited: true") /sync makes matrix-js-sdk call
+// Room.resetLiveTimeline. With timelineSupport off that discards every loaded
+// event; with it on the old timeline is kept and linked. Either way the SDK
+// emits Room.timelineReset and *no* Room.timeline, so a store that only
+// listens to the latter renders stale history until an unrelated event
+// happens to arrive. See zooid-ai/zooid#14.
+describe("useTimeline across a gappy sync", () => {
+  function seed(room: Room, bodies: string[]) {
+    for (const body of bodies) {
+      pushTimelineEvent(
+        room,
+        mkMatrixEvent({
+          roomId,
+          sender: "@a:h.example",
+          type: "m.room.message",
+          content: { msgtype: "m.text", body },
+        }),
+      );
+    }
+  }
+
+  it("re-reads the timeline when the SDK resets it", () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me });
+    seed(room, ["one", "two"]);
+    (client as unknown as { getRoom: () => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    expect(result.current.events).toHaveLength(2);
+
+    act(() => {
+      room.resetLiveTimeline("prev_batch_tok", null);
+    });
+
+    // The reset happened; whatever the hook now reports must match the room,
+    // not a snapshot frozen from before the reset.
+    expect(result.current.events.map((e) => e.getId())).toEqual(
+      room
+        .getUnfilteredTimelineSet()
+        .getTimelines()
+        .flatMap((tl) => tl.getEvents())
+        .map((e) => e.getId()),
+    );
+  });
+
+  it("keeps history across the reset when timelineSupport is enabled", () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    seed(room, ["one", "two"]);
+    (client as unknown as { getRoom: () => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    expect(result.current.events).toHaveLength(2);
+
+    act(() => {
+      // Second arg is the forward-pagination token sync passes for a gappy
+      // room; it is what lets the SDK keep the old timeline around.
+      room.resetLiveTimeline("prev_batch_tok", "old_sync_tok");
+      seed(room, ["three"]);
+    });
+
+    expect(result.current.events.map((e) => e.getContent().body)).toEqual([
+      "one",
+      "two",
+      "three",
+    ]);
+  });
+
+  it("drops history across the reset when timelineSupport is disabled", () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: false });
+    seed(room, ["one", "two"]);
+    (client as unknown as { getRoom: () => unknown }).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    expect(result.current.events).toHaveLength(2);
+
+    act(() => {
+      room.resetLiveTimeline("prev_batch_tok", "old_sync_tok");
+      seed(room, ["three"]);
+    });
+
+    // Documents the SDK behaviour the fix exists to avoid: without
+    // timelineSupport the earlier events are gone from the timeline set.
+    expect(result.current.events.map((e) => e.getContent().body)).toEqual(["three"]);
   });
 });
 

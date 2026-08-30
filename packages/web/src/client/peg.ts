@@ -29,6 +29,14 @@ class MatrixClientPegImpl {
       // also what we want in dev — persistent sync state lands in PLAN-02
       // alongside an IndexedDB-backed store.
       store: new MemoryStore({ localStorage: globalThis.localStorage }),
+      // Required for history to survive a gappy ("limited: true") sync. The
+      // SDK resets the live timeline whenever sync reports a gap, and
+      // EventTimelineSet.resetLiveTimeline() discards *every* loaded event
+      // unless timelineSupport is on — so a backgrounded tab would come back
+      // to a timeline with a silent hole where the middle of the
+      // conversation used to be. With it on, the old timeline is kept and
+      // linked, which is what allRoomEvents() in use-timeline.ts assumes.
+      timelineSupport: true,
     });
     sessionStorage_.setJSON("session", creds);
     this.emit();
