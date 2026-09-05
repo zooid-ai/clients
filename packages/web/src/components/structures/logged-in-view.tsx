@@ -54,7 +54,22 @@ export function LoggedInView() {
   const roomId = roomMatch?.params.roomId ?? null;
 
   useEffect(() => {
-    client.startClient({ initialSyncLimit: 10 }).catch(() => {});
+    let cancelled = false;
+    void (async () => {
+      const { persistent, reason } = await MatrixClientPeg.whenStoreReady();
+      if (cancelled) return;
+      if (!persistent) {
+        console.warn(
+          `[logged-in-view] starting sync without persistent storage${reason ? `: ${reason}` : ""}`,
+        );
+      }
+      // initialSyncLimit only applies when there is no saved sync to resume
+      // from; with IndexedDB warm we resume from the stored token instead.
+      client.startClient({ initialSyncLimit: 10 }).catch(() => {});
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [client]);
 
   useEffect(() => {
@@ -110,7 +125,7 @@ export function LoggedInView() {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => MatrixClientPeg.reset()}>
+              <DropdownMenuItem onSelect={() => void MatrixClientPeg.logout()}>
                 Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
