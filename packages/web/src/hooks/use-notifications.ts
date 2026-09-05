@@ -5,8 +5,11 @@ import { MatrixClientPeg } from "@/client/peg";
 import { sessionStorage_ } from "@/client/storage";
 import { evaluateNotification } from "@/lib/matrix/notifications";
 
-const PROMPTED_KEY = "notifications-prompted";
 const ENABLED_KEY = "notifications-enabled";
+// Stale flag from the old auto-prompt bug this cycle removes. sessionStorage_
+// is actually localStorage (client/storage.ts), so it survives forever unless
+// deleted — anyone who hit the bug carries it permanently otherwise.
+const STALE_PROMPTED_KEY = "notifications-prompted";
 
 export function notificationsEnabledLocally(): boolean {
   return sessionStorage_.get(ENABLED_KEY) !== "0";
@@ -16,7 +19,12 @@ export function setNotificationsEnabledLocally(enabled: boolean): void {
   sessionStorage_.set(ENABLED_KEY, enabled ? "1" : "0");
 }
 
-export function useNotifications(): void {
+/**
+ * The in-page fallback notifier. Active only when `hasPushSubscription` is
+ * false — with a subscription registered, the service worker is the sole
+ * renderer (ZNC025 §5); running both would double-notify on a live event.
+ */
+export function useNotifications(hasPushSubscription: boolean): void {
   const client = useSyncExternalStore(
     (cb) => MatrixClientPeg.subscribe(cb),
     () => MatrixClientPeg.safeGet(),
@@ -25,14 +33,11 @@ export function useNotifications(): void {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission !== "default") return;
-    if (sessionStorage_.get(PROMPTED_KEY)) return;
-    sessionStorage_.set(PROMPTED_KEY, "1");
-    void Notification.requestPermission();
+    sessionStorage_.remove(STALE_PROMPTED_KEY);
   }, []);
 
   useEffect(() => {
+    if (hasPushSubscription) return;
     if (!client || typeof Notification === "undefined") return;
     const onTimeline = (
       event: MatrixEvent,
@@ -62,5 +67,5 @@ export function useNotifications(): void {
     return () => {
       client.off(RoomEvent.Timeline, onTimeline);
     };
-  }, [client, navigate]);
+  }, [client, navigate, hasPushSubscription]);
 }

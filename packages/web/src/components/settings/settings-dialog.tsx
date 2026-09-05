@@ -12,9 +12,13 @@ import { ProfileSection } from "./profile-section";
 export function SettingsDialog({
   open,
   onOpenChange,
+  pushGatewayUrl,
+  vapidPublicKey,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  pushGatewayUrl?: string;
+  vapidPublicKey?: string;
 }) {
   const [tab, setTab] = useState("profile");
   return (
@@ -34,7 +38,7 @@ export function SettingsDialog({
           {tab === "profile" ? (
             <ProfileSection onSaved={() => onOpenChange(false)} />
           ) : (
-            <NotificationSection />
+            <NotificationSection pushGatewayUrl={pushGatewayUrl} vapidPublicKey={vapidPublicKey} />
           )}
         </Tabs>
       </DialogContent>

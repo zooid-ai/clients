@@ -83,7 +83,7 @@ function aliceMessage(eventId = "$m1") {
 describe("useNotifications", () => {
   it("fires a browser notification for a live notifying event while unfocused", () => {
     const { client, room } = setup();
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() => emitLive(client, room, aliceMessage()));
     expect(FakeNotification.instances).toHaveLength(1);
     expect(FakeNotification.instances[0].title).toBe(room.name);
@@ -93,7 +93,7 @@ describe("useNotifications", () => {
   it("does not notify while the tab is focused", () => {
     const { client, room } = setup();
     vi.spyOn(document, "hasFocus").mockReturnValue(true);
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() => emitLive(client, room, aliceMessage()));
     expect(FakeNotification.instances).toHaveLength(0);
   });
@@ -101,7 +101,7 @@ describe("useNotifications", () => {
   it("does not notify without granted permission", () => {
     const { client, room } = setup();
     FakeNotification.permission = "denied";
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() => emitLive(client, room, aliceMessage()));
     expect(FakeNotification.instances).toHaveLength(0);
   });
@@ -109,21 +109,21 @@ describe("useNotifications", () => {
   it("does not notify when disabled locally in settings", () => {
     const { client, room } = setup();
     sessionStorage_.set("notifications-enabled", "0");
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() => emitLive(client, room, aliceMessage()));
     expect(FakeNotification.instances).toHaveLength(0);
   });
 
   it("does not notify before initial sync completes", () => {
     const { client, room } = setup({ initialSyncComplete: false });
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() => emitLive(client, room, aliceMessage()));
     expect(FakeNotification.instances).toHaveLength(0);
   });
 
   it("does not notify for non-live (backfill) events", () => {
     const { client, room } = setup();
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() =>
       (client as unknown as { emit: (...args: unknown[]) => void }).emit(
         RoomEvent.Timeline,
@@ -139,24 +139,29 @@ describe("useNotifications", () => {
 
   it("does not notify when push rules decline (muted room/user)", () => {
     const { client, room } = setup({ notify: false });
-    renderHook(() => useNotifications(), { wrapper });
+    renderHook(() => useNotifications(false), { wrapper });
     act(() => emitLive(client, room, aliceMessage()));
     expect(FakeNotification.instances).toHaveLength(0);
   });
 
-  it("requests permission once on first logged-in mount, never again", () => {
+  it("NEVER requests permission — enabling notifications is the settings button's job now", () => {
     setup();
     FakeNotification.permission = "default";
-    const first = renderHook(() => useNotifications(), { wrapper });
-    expect(FakeNotification.requestPermission).toHaveBeenCalledTimes(1);
-    first.unmount();
-    renderHook(() => useNotifications(), { wrapper });
-    expect(FakeNotification.requestPermission).toHaveBeenCalledTimes(1);
+    renderHook(() => useNotifications(false), { wrapper });
+    expect(FakeNotification.requestPermission).not.toHaveBeenCalled();
   });
 
-  it("does not request permission when already granted", () => {
+  it("clears the stale prompt-once flag from the old auto-prompt bug", () => {
+    sessionStorage_.set("notifications-prompted", "1");
     setup();
-    renderHook(() => useNotifications(), { wrapper });
-    expect(FakeNotification.requestPermission).not.toHaveBeenCalled();
+    renderHook(() => useNotifications(false), { wrapper });
+    expect(sessionStorage_.get("notifications-prompted")).toBeNull();
+  });
+
+  it("registers no timeline listener when a push subscription is active — the service worker is the sole renderer", () => {
+    const { client, room } = setup();
+    renderHook(() => useNotifications(true), { wrapper });
+    act(() => emitLive(client, room, aliceMessage()));
+    expect(FakeNotification.instances).toHaveLength(0);
   });
 });

@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { useNotifications } from "@/hooks/use-notifications";
+import { usePushSubscription } from "@/hooks/use-push-subscription";
+import { useServiceWorkerMessages } from "@/hooks/use-service-worker-messages";
 import {
   Sidebar,
   SidebarContent,
@@ -37,7 +39,12 @@ export interface LoggedInOutletContext {
   setScope: (scope: Scope) => void;
 }
 
-export function LoggedInView() {
+export interface LoggedInViewProps {
+  pushGatewayUrl?: string;
+  vapidPublicKey?: string;
+}
+
+export function LoggedInView({ pushGatewayUrl, vapidPublicKey }: LoggedInViewProps = {}) {
   const client = useMatrixClient();
   const userId = client.getUserId() ?? "";
   const myName = useUserName(userId);
@@ -49,7 +56,12 @@ export function LoggedInView() {
   const [scope, setScope] = useState<Scope | null>(null);
   const [rightPanel, setRightPanel] = useState<"home" | "people" | "notifications" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  useNotifications();
+  const push = usePushSubscription({
+    push_gateway_url: pushGatewayUrl,
+    vapid_public_key: vapidPublicKey,
+  });
+  useNotifications(push.subscribed);
+  useServiceWorkerMessages();
   const roomMatch = useMatch("/room/:roomId");
   const roomId = roomMatch?.params.roomId ?? null;
 
@@ -129,7 +141,12 @@ export function LoggedInView() {
             />
           </div>
         </header>
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          pushGatewayUrl={pushGatewayUrl}
+          vapidPublicKey={vapidPublicKey}
+        />
         <main className="flex-1 min-h-0 overflow-hidden">
           <div className="relative flex h-full min-h-0">
             <div className="min-w-0 flex-1 overflow-hidden">

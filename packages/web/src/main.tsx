@@ -26,6 +26,8 @@ async function bootstrap() {
   const config: AppConfig = {
     homeserverUrl,
     defaultIdpLabel: runtime?.default_idp_label ?? null,
+    pushGatewayUrl: runtime?.push_gateway_url,
+    vapidPublicKey: runtime?.vapid_public_key,
   };
   if (import.meta.env.DEV) {
     // Affordance for Playwright e2e (and ZNC002 features) to call SDK methods

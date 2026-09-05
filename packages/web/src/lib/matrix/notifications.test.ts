@@ -70,3 +70,64 @@ describe("evaluateNotification", () => {
     expect(payload?.body.length).toBeLessThanOrEqual(140);
   });
 });
+
+describe("evaluateNotification — agent event types", () => {
+  function setupAgent(opts: { notify?: boolean } = {}) {
+    const { client, room } = setup({ notify: opts.notify ?? true });
+    room.name = "general";
+    return { client, room };
+  }
+
+  it("renders an approval request without a message preview", () => {
+    const { client, room } = setupAgent();
+    const ev = makeMatrixEvent({
+      eventId: "$a1",
+      roomId,
+      type: "dev.zooid.approval_request",
+      sender: "@claude:example.org",
+      content: { tool_title: "Run tests" },
+    });
+    expect(evaluateNotification(client, room, ev)).toEqual({
+      roomId,
+      eventId: "$a1",
+      title: "general",
+      body: "claude needs approval: Run tests",
+    });
+  });
+
+  it("names the agent and room on turn.end, with no prose", () => {
+    const { client, room } = setupAgent();
+    // dev.zooid.turn.end carries no body of its own to render — the daemon's
+    // toTurnEndBody already computed a human-readable one.
+    const ev = makeMatrixEvent({
+      eventId: "$t1",
+      roomId,
+      type: "dev.zooid.turn.end",
+      sender: "@claude:example.org",
+      content: { body: "claude finished", agent_id: "claude", produced_output: true },
+    });
+    const payload = evaluateNotification(client, room, ev);
+    expect(payload!.body).toBe("claude finished");
+  });
+
+  it("still returns null for a high-frequency progress event", () => {
+    const { client, room } = setupAgent();
+    // tool_call, turn.start and agent_message_chunk must never notify.
+    for (const type of ["dev.zooid.tool_call", "dev.zooid.turn.start", "dev.zooid.agent_message_chunk"]) {
+      const ev = makeMatrixEvent({ eventId: "$x", roomId, type, sender: "@a:x", content: {} });
+      expect(evaluateNotification(client, room, ev)).toBeNull();
+    }
+  });
+
+  it("still suppresses the user's own events", () => {
+    const { client, room } = setupAgent();
+    const ev = makeMatrixEvent({
+      eventId: "$t2",
+      roomId,
+      type: "dev.zooid.turn.end",
+      sender: me,
+      content: { body: "me finished" },
+    });
+    expect(evaluateNotification(client, room, ev)).toBeNull();
+  });
+});

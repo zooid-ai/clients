@@ -24,6 +24,8 @@ import { useAuthState } from "./hooks/use-auth-state";
 export interface AppConfig {
   homeserverUrl: string;
   defaultIdpLabel?: string | null;
+  pushGatewayUrl?: string;
+  vapidPublicKey?: string;
 }
 
 export function App({
@@ -118,7 +120,13 @@ function AppRoutes({ config }: { config: AppConfig }) {
     <Routes>
       <Route
         path="/"
-        element={auth === "logged-in" ? <LoggedInView /> : <Navigate to="/login" replace />}
+        element={
+          auth === "logged-in" ? (
+            <LoggedInView pushGatewayUrl={config.pushGatewayUrl} vapidPublicKey={config.vapidPublicKey} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
       >
         <Route index element={<SpaceHomeRoute />} />
         <Route path="room/:roomId" element={<RoomView />} />
