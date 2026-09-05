@@ -293,8 +293,7 @@ describe("agent push rules", () => {
     for (const call of authedRequest.mock.calls) {
       expect(call[0]).toBe("PUT");
       // An underride, or an override appended to the end, would sit after
-      // .m.rule.suppress_notices and never fire — dev.zooid.error carries a
-      // vestigial msgtype: m.notice.
+      // .m.rule.suppress_notices and never fire.
       expect(call[2]).toEqual({ before: ".m.rule.suppress_notices" });
     }
   });

@@ -175,11 +175,10 @@ export const AGENT_RULE_IDS = AGENT_RULES.map((r) => r.id);
  * .m.rule.suppress_notices.
  *
  * Positioning is the whole point. That default override matches on
- * content.msgtype alone without conditioning on event type, and
- * dev.zooid.error carries a vestigial `msgtype: "m.notice"` from
- * event-encoders.ts. An underride — or an override appended to the end,
- * which is all `client.addPushRule` can produce — would sit behind it and
- * silently never fire.
+ * content.msgtype alone without conditioning on event type — an underride, or
+ * an override appended to the end (all `client.addPushRule` can produce),
+ * would sit behind it and silently never fire the moment any `dev.zooid.*`
+ * event's content happens to carry a `msgtype` key at all.
  */
 export async function ensureAgentPushRules(client: MatrixClient): Promise<void> {
   const existing = new Set((client.pushRules?.global?.override ?? []).map((r) => r.rule_id));
