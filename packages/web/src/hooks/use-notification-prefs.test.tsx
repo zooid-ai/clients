@@ -46,4 +46,24 @@ describe("useNotificationPrefs", () => {
     expect(client.addPushRule).toHaveBeenCalled();
     expect(client.getPushRules).toHaveBeenCalled();
   });
+
+  it("exposes agent rule enabled state, defaulting to on", () => {
+    const client = makePushClient();
+    MatrixClientPeg.injectClientForTest(client);
+    const { result } = renderHook(() => useNotificationPrefs());
+    expect(result.current.agentRulesEnabled["dev.zooid.turn.end"]).toBe(true);
+  });
+
+  it("setAgentRuleEnabled calls through to setPushRuleEnabled", async () => {
+    const client = makePushClient();
+    MatrixClientPeg.injectClientForTest(client);
+    const { result } = renderHook(() => useNotificationPrefs());
+    await act(() => result.current.setAgentRuleEnabled("dev.zooid.turn.end", false));
+    expect(client.setPushRuleEnabled).toHaveBeenCalledWith(
+      "global",
+      "override",
+      "dev.zooid.turn.end",
+      false,
+    );
+  });
 });

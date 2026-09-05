@@ -33,12 +33,55 @@ export interface HierarchyResponse {
   }>;
 }
 
+/** `IPusher["data"]` is declared `{format?, url?, brand?}` in matrix-js-sdk 34 — no room for a web-push subscription. */
+export interface WebPushPusherData {
+  url: string;
+  endpoint: string;
+  auth: string;
+  events_only: boolean;
+  default_payload: Record<string, never>;
+}
+
+export interface WebPushPusher {
+  kind: "http";
+  app_id: string;
+  pushkey: string;
+  app_display_name: string;
+  device_display_name: string;
+  lang: string;
+  append: boolean;
+  data: WebPushPusherData;
+}
+
+export interface MatrixPusher {
+  app_id: string;
+  pushkey: string;
+  data?: { url?: string };
+}
+
 /** Methods that are under-typed on MatrixClient in matrix-js-sdk 34. */
 interface ClientExt {
   publicRooms(opts: PublicRoomsQuery): Promise<PublicRoomsResponse>;
   getRoomHierarchy(roomId: string): Promise<HierarchyResponse>;
   getRoomIdForAlias(alias: string): Promise<{ room_id: string } | null>;
   joinRoom(idOrAlias: string): Promise<{ roomId: string }>;
+  setPusher(pusher: WebPushPusher): Promise<object>;
+  getPushers(): Promise<{ pushers: MatrixPusher[] }>;
+  removePusher(pushkey: string, appId: string): Promise<object>;
+  /**
+   * `client.addPushRule` calls `authedRequest` with `queryParams: undefined`
+   * (matrix-js-sdk client.js:7571), so a rule added through it always lands
+   * after `.m.rule.suppress_notices` and can never fire. This is the raw
+   * seam that can pass `before`.
+   */
+  http: {
+    authedRequest<T>(
+      method: string,
+      path: string,
+      queryParams?: Record<string, string>,
+      body?: unknown,
+    ): Promise<T>;
+  };
 }
 
 export function clientExt(client: MatrixClient): ClientExt {

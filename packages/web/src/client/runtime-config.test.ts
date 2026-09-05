@@ -49,4 +49,29 @@ describe("loadRuntimeConfig", () => {
     const cfg = await loadRuntimeConfig();
     expect(cfg).toEqual({});
   });
+
+  it("reads the two push fields", async () => {
+    mswServer.use(
+      http.get("/config.json", () =>
+        HttpResponse.json({
+          homeserver_url: "https://hs.example",
+          push_gateway_url: "https://hs.example/_matrix/push/v1/notify",
+          vapid_public_key: "BPk",
+        }),
+      ),
+    );
+    const cfg = await loadRuntimeConfig();
+    expect(cfg).toEqual({
+      homeserver_url: "https://hs.example",
+      push_gateway_url: "https://hs.example/_matrix/push/v1/notify",
+      vapid_public_key: "BPk",
+    });
+  });
+
+  it("drops non-string push fields rather than passing junk to subscribe()", async () => {
+    mswServer.use(
+      http.get("/config.json", () => HttpResponse.json({ push_gateway_url: 42, vapid_public_key: null })),
+    );
+    expect(await loadRuntimeConfig()).toEqual({});
+  });
 });
