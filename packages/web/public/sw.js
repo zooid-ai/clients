@@ -26,13 +26,19 @@ const PERSISTENT_TYPES = [
 ];
 
 function bodyFor(p) {
-  // Agent events carry no prose. Rendering `${sender}: ${undefined}` is the
-  // failure this branch exists to prevent.
+  // Agent events carry no `body` prose of their own. Rendering
+  // `${sender}: ${undefined}` is the failure this branch exists to prevent.
   switch (p.type) {
     case "dev.zooid.approval_request":
       return `${p.sender_display_name || "An agent"} needs approval`;
     case "dev.zooid.turn.end":
-      return `${p.sender_display_name || "An agent"} finished`;
+      // The prose itself never pushes — agent messages are `m.notice`, which
+      // `.m.rule.suppress_notices` silences so a chatty turn doesn't fire one
+      // push per chunk. turn.end carries a preview of the final message so the
+      // notification says what the agent actually said, not just that it stopped.
+      return p.preview
+        ? `${p.sender_display_name || "An agent"}: ${p.preview}`
+        : `${p.sender_display_name || "An agent"} finished`;
     case "dev.zooid.error":
       return p.body || `${p.sender_display_name || "An agent"} hit an error`;
     default:

@@ -82,6 +82,23 @@ describe("push", () => {
     expect(sw.showNotification.mock.calls[0]![1]).toMatchObject({ silent: false });
   });
 
+  it("shows what the agent said on turn.end, not just that it stopped", async () => {
+    sw.setClients([]);
+    await sw.dispatch(
+      "push",
+      pushEvent({ ...message, type: "dev.zooid.turn.end", body: undefined, preview: "the deploy is green" }),
+    );
+    expect(sw.showNotification.mock.calls[0]![1]).toMatchObject({
+      body: "Alice: the deploy is green",
+    });
+  });
+
+  it("falls back to 'finished' when the turn produced no preview", async () => {
+    sw.setClients([]);
+    await sw.dispatch("push", pushEvent({ ...message, type: "dev.zooid.turn.end", body: undefined }));
+    expect(sw.showNotification.mock.calls[0]![1]).toMatchObject({ body: "Alice finished" });
+  });
+
   it("takes over on install rather than waiting for every tab to close", async () => {
     // Without this, a fix to push handling stays inert for anyone who keeps a
     // tab open — and this worker caches nothing, so there is no reason to wait.
