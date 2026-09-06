@@ -6,6 +6,7 @@ const noop = () => {};
 const base: NotificationSectionViewProps = {
   permission: "default",
   pushSupported: true,
+  subscribed: false,
   subscribeError: null,
   onEnable: noop,
   localEnabled: true,
@@ -47,7 +48,17 @@ export const Default: Story = {
 
 /** permission `granted`, subscription active — agent toggles and the sound switch visible. */
 export const Granted: Story = {
-  args: { ...base, permission: "granted", pushSupported: true },
+  args: { ...base, permission: "granted", pushSupported: true, subscribed: true },
+};
+
+/**
+ * permission was granted long before this feature existed (or via the old
+ * auto-prompt) but no PushSubscription was ever created — the actual bug this
+ * story exists to catch: the Enable button must still show, gated on
+ * `subscribed`, not on `permission`.
+ */
+export const GrantedNotSubscribed: Story = {
+  args: { ...base, permission: "granted", pushSupported: true, subscribed: false },
 };
 
 /** permission `denied` — the re-enable-in-site-settings copy, no dead Enable button. */
@@ -76,6 +87,7 @@ export const AgentRulesMixed: Story = {
     ...base,
     permission: "granted",
     pushSupported: true,
+    subscribed: true,
     agentRulesEnabled: {
       "dev.zooid.approval_request": true,
       "dev.zooid.turn.end": false,
@@ -91,6 +103,7 @@ export const Overflow: Story = {
     ...base,
     permission: "granted",
     pushSupported: true,
+    subscribed: true,
     keywords: [
       "deploy",
       "incident",

@@ -22,6 +22,8 @@ const AGENT_RULE_LABELS: Record<string, string> = {
 export interface NotificationSectionViewProps {
   permission: NotificationPermission;
   pushSupported: boolean;
+  /** Whether a browser PushSubscription is currently registered — the source of truth for whether push actually works, independent of `permission`. */
+  subscribed: boolean;
   subscribeError?: string | null;
   onEnable: () => void;
   localEnabled: boolean;
@@ -48,6 +50,7 @@ export interface NotificationSectionViewProps {
 export function NotificationSectionView({
   permission,
   pushSupported,
+  subscribed,
   subscribeError,
   onEnable,
   localEnabled,
@@ -89,6 +92,16 @@ export function NotificationSectionView({
             notifications while a tab is open.
           </p>
         )}
+        {/* The bug this branch exists to fix: permission can already be
+            "granted" from before this feature existed (or from the in-page
+            fallback alone), with no PushSubscription ever created — gating
+            only on `permission === "default"` above would leave that user
+            with no way to finish enabling push. */}
+        {permission === "granted" && pushSupported && !subscribed && (
+          <Button size="sm" variant="outline" onClick={onEnable}>
+            Enable notifications
+          </Button>
+        )}
         {subscribeError && <p className="text-xs text-destructive">{subscribeError}</p>}
         <Button
           size="sm"
@@ -100,7 +113,7 @@ export function NotificationSectionView({
         </Button>
       </div>
 
-      {permission === "granted" && pushSupported && (
+      {subscribed && (
         <div className="space-y-2">
           <p className="text-sm font-medium">Agent notifications</p>
           {AGENT_RULE_IDS.map((id) => {
@@ -298,6 +311,7 @@ export function NotificationSection({
     <NotificationSectionView
       permission={permission}
       pushSupported={push.supported}
+      subscribed={push.subscribed}
       subscribeError={subscribeError}
       onEnable={() => void handleEnable()}
       localEnabled={localEnabled}
