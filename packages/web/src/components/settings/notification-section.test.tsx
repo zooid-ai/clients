@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConditionKind } from "matrix-js-sdk";
 import { MatrixClientPeg } from "@/client/peg";
@@ -93,13 +93,29 @@ describe("NotificationSection", () => {
   });
 
   describe("with push configured", () => {
-    beforeEach(() => {
+    const gatewayUrl = "https://hs.example/notify";
+    const fakeSubscription = {
+      endpoint: "https://fcm.example/abc",
+      toJSON: () => ({ keys: { p256dh: "BPk_pub", auth: "authsecret" } }),
+    };
+
+    function stubServiceWorker(opts: { subscribed?: boolean } = {}) {
+      const getSubscription = vi
+        .fn()
+        .mockResolvedValue(opts.subscribed === false ? null : fakeSubscription);
       Object.defineProperty(navigator, "serviceWorker", {
         configurable: true,
-        value: {
-          register: vi.fn(),
-          ready: Promise.resolve({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null) } }),
-        },
+        value: { register: vi.fn(), ready: Promise.resolve({ pushManager: { getSubscription } }) },
+      });
+    }
+
+    beforeEach(() => {
+      stubServiceWorker();
+      const client = MatrixClientPeg.safeGet() as unknown as Record<string, unknown>;
+      // No drift: the stored pusher already matches this gatewayUrl, so the
+      // mount effect settles as "subscribed" without calling setPusher again.
+      client.getPushers = vi.fn().mockResolvedValue({
+        pushers: [{ app_id: "dev.zooid.web", pushkey: "BPk_pub", data: { url: gatewayUrl } }],
       });
     });
     afterEach(() => {
@@ -107,19 +123,22 @@ describe("NotificationSection", () => {
       delete navigator.serviceWorker;
     });
 
-    it("shows the agent-event toggles and sound switch once push is supported", () => {
-      render(<NotificationSection pushGatewayUrl="https://hs.example/notify" vapidPublicKey="BPk" />);
-      expect(screen.getByRole("button", { name: /agent finished a turn/i })).toHaveAttribute(
-        "aria-pressed",
-        "true",
+    it("shows the agent-event toggles and sound switch once a subscription is confirmed", async () => {
+      render(<NotificationSection pushGatewayUrl={gatewayUrl} vapidPublicKey="BPk" />);
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /agent finished a turn/i })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        ),
       );
       expect(screen.getByRole("button", { name: /approval requests/i })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /sound when an agent finishes/i })).toBeInTheDocument();
     });
 
-    it("toggles an agent rule off", () => {
-      render(<NotificationSection pushGatewayUrl="https://hs.example/notify" vapidPublicKey="BPk" />);
+    it("toggles an agent rule off", async () => {
+      render(<NotificationSection pushGatewayUrl={gatewayUrl} vapidPublicKey="BPk" />);
       const client = MatrixClientPeg.safeGet()!;
+      await waitFor(() => screen.getByRole("button", { name: /agent finished a turn/i }));
       fireEvent.click(screen.getByRole("button", { name: /agent finished a turn/i }));
       expect(client.setPushRuleEnabled).toHaveBeenCalledWith(
         "global",
@@ -129,12 +148,23 @@ describe("NotificationSection", () => {
       );
     });
 
-    it("toggles the sound switch locally", () => {
-      render(<NotificationSection pushGatewayUrl="https://hs.example/notify" vapidPublicKey="BPk" />);
-      const toggle = screen.getByRole("button", { name: /sound when an agent finishes/i });
+    it("toggles the sound switch locally", async () => {
+      render(<NotificationSection pushGatewayUrl={gatewayUrl} vapidPublicKey="BPk" />);
+      const toggle = await waitFor(() =>
+        screen.getByRole("button", { name: /sound when an agent finishes/i }),
+      );
       expect(toggle).toHaveAttribute("aria-pressed", "true");
       fireEvent.click(toggle);
       expect(sessionStorage_.get("turn-end-sound-enabled")).toBe("false");
+    });
+
+    it("shows Enable — not the toggles — when permission is granted but no subscription was ever created", async () => {
+      stubServiceWorker({ subscribed: false });
+      render(<NotificationSection pushGatewayUrl={gatewayUrl} vapidPublicKey="BPk" />);
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /enable notifications/i })).toBeInTheDocument(),
+      );
+      expect(screen.queryByRole("button", { name: /agent finished a turn/i })).not.toBeInTheDocument();
     });
   });
 });
