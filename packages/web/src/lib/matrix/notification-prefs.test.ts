@@ -51,7 +51,21 @@ export function makePushClient(seed: RuleSeed = {}) {
     },
   };
   cast.setRoomMutePushRule = vi.fn(async () => {});
-  cast.addPushRule = vi.fn(async () => ({}));
+  // Mirrors real server behavior (append, enabled by default) so a caller
+  // that adds a rule and then reads it back via getPushRules/refresh sees it
+  // — rather than every consumer having to know this mock is otherwise inert.
+  cast.addPushRule = vi.fn(
+    async (
+      _scope: string,
+      kind: "override" | "content" | "room" | "sender" | "underride",
+      ruleId: string,
+      body: Pick<IPushRule, "actions" | "conditions" | "pattern">,
+    ) => {
+      const global = (cast.pushRules as { global: Record<string, IPushRule[]> }).global;
+      global[kind] = [...(global[kind] ?? []), { rule_id: ruleId, default: false, enabled: true, ...body }];
+      return {};
+    },
+  );
   cast.deletePushRule = vi.fn(async () => ({}));
   cast.setPushRuleEnabled = vi.fn(async () => ({}));
   cast.getPushRules = vi.fn(async () => cast.pushRules);
@@ -325,6 +339,12 @@ describe("agent push rules", () => {
     };
     await ensureAgentPushRules(client);
     expect(addPushRule).not.toHaveBeenCalled();
+  });
+
+  it("reports a rule that does not exist as off, not on — a missing rule never notifies", () => {
+    const { client } = clientWithPushRules();
+    (client as unknown as Record<string, unknown>).pushRules = { global: { override: [] } };
+    expect(getAgentRulesEnabled(client)["dev.zooid.turn.end"]).toBe(false);
   });
 
   it("reads and writes the enabled state per rule", async () => {

@@ -207,7 +207,10 @@ export function getAgentRulesEnabled(client: MatrixClient): Record<string, boole
   const overrides = client.pushRules?.global?.override ?? [];
   const out: Record<string, boolean> = {};
   for (const id of AGENT_RULE_IDS) {
-    out[id] = overrides.find((r) => r.rule_id === id)?.enabled ?? true;
+    // A rule that doesn't exist doesn't notify — showing "On" here would lie
+    // about a state ensureAgentPushRules failed to reach (it happened: a
+    // pusher registered with no rules installed, stuck until self-healed).
+    out[id] = overrides.find((r) => r.rule_id === id)?.enabled ?? false;
   }
   return out;
 }

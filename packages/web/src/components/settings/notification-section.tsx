@@ -117,7 +117,7 @@ export function NotificationSectionView({
         <div className="space-y-2">
           <p className="text-sm font-medium">Agent notifications</p>
           {AGENT_RULE_IDS.map((id) => {
-            const enabled = agentRulesEnabled[id] ?? true;
+            const enabled = agentRulesEnabled[id] ?? false;
             return (
               <Button
                 key={id}

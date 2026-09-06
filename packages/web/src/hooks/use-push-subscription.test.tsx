@@ -159,6 +159,30 @@ describe("usePushSubscription", () => {
     expect(setPusher).not.toHaveBeenCalled();
   });
 
+  it("installs missing push rules during mount reconciliation, not just on enable() — a pusher can exist with no rules if enable() failed after registering it", async () => {
+    getSubscription.mockResolvedValue(subscription);
+    const client = MatrixClientPeg.get() as unknown as { addPushRule: ReturnType<typeof vi.fn> } & Record<
+      string,
+      unknown
+    >;
+    // Pusher already registered (matches gatewayUrl — no drift), but the
+    // rules were never installed: exactly the stuck state a failed
+    // ensureAgentPushRules call during a prior enable() would leave behind.
+    (client.getPushers as ReturnType<typeof vi.fn>).mockResolvedValue({
+      pushers: [{ app_id: "dev.zooid.web", pushkey: "BPk_pub", data: { url: config.push_gateway_url } }],
+    });
+    renderHook(() => usePushSubscription(config));
+    await waitFor(() =>
+      expect(client.addPushRule).toHaveBeenCalledWith(
+        "global",
+        "override",
+        "dev.zooid.approval_request",
+        expect.anything(),
+      ),
+    );
+    expect(setPusher).not.toHaveBeenCalled();
+  });
+
   it("re-registers when the stored pusher points at a stale gateway", async () => {
     getSubscription.mockResolvedValue(subscription);
     const client = MatrixClientPeg.get() as unknown as Record<string, unknown>;

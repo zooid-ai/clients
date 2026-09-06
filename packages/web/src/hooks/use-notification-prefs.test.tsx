@@ -47,11 +47,13 @@ describe("useNotificationPrefs", () => {
     expect(client.getPushRules).toHaveBeenCalled();
   });
 
-  it("exposes agent rule enabled state, defaulting to on", () => {
+  it("exposes agent rule enabled state, defaulting to off when the rule doesn't exist yet", () => {
     const client = makePushClient();
     MatrixClientPeg.injectClientForTest(client);
     const { result } = renderHook(() => useNotificationPrefs());
-    expect(result.current.agentRulesEnabled["dev.zooid.turn.end"]).toBe(true);
+    // A missing rule never notifies — showing "on" here would lie about a
+    // state ensureAgentPushRules failed to reach.
+    expect(result.current.agentRulesEnabled["dev.zooid.turn.end"]).toBe(false);
   });
 
   it("setAgentRuleEnabled calls through to setPushRuleEnabled", async () => {
