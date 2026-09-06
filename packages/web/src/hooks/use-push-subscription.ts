@@ -71,8 +71,16 @@ export function usePushSubscription(config: PushConfig): UsePushSubscription {
       const { pushers } = await clientExt(client).getPushers();
       const existing = pushers.find((p) => p.app_id === ZOOID_APP_ID && p.pushkey === p256dh);
       // Only re-register on drift (a stale gateway URL) — never blindly.
-      if (existing && existing.data?.url === gatewayUrl) return;
-      await registerPusher(client, sub, { push_gateway_url: gatewayUrl });
+      if (!existing || existing.data?.url !== gatewayUrl) {
+        await registerPusher(client, sub, { push_gateway_url: gatewayUrl });
+      }
+      // Always verify the rules too, not just on a fresh enable(): a pusher
+      // can exist with no rules installed (e.g. enable() registered the
+      // pusher, then failed before reaching this step) — ensureAgentPushRules
+      // is idempotent, so re-checking here is what makes that state
+      // self-healing on the next reload instead of stuck forever, since the
+      // Enable button stays hidden once `subscribed` is true.
+      await ensureAgentPushRules(client);
     })();
     return () => {
       cancelled = true;
