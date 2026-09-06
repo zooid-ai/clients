@@ -271,48 +271,41 @@ describe("keywords", () => {
 });
 
 describe("agent push rules", () => {
-  function clientWithHttp() {
-    const authedRequest = vi.fn().mockResolvedValue({});
+  function clientWithPushRules() {
+    const addPushRule = vi.fn().mockResolvedValue({});
     const client = makeFakeClient({ userId: "@me:example.org" }) as unknown as Record<string, unknown>;
-    client.http = { authedRequest };
+    client.addPushRule = addPushRule;
     client.getPushRules = vi.fn().mockResolvedValue({ global: { override: [], underride: [] } });
     client.setPushRules = vi.fn();
-    return { client: client as unknown as MatrixClient, authedRequest };
+    return { client: client as unknown as MatrixClient, addPushRule };
   }
 
-  it("installs all three rules as overrides positioned before .m.rule.suppress_notices", async () => {
-    const { client, authedRequest } = clientWithHttp();
+  it("installs all three rules as plain overrides — no before/after, which Matrix forbids against a server-default rule", async () => {
+    const { client, addPushRule } = clientWithPushRules();
     await ensureAgentPushRules(client);
 
-    const paths = authedRequest.mock.calls.map((c) => c[1]);
-    expect(paths).toEqual([
-      "/pushrules/global/override/dev.zooid.approval_request",
-      "/pushrules/global/override/dev.zooid.turn.end",
-      "/pushrules/global/override/dev.zooid.error",
-    ]);
-    for (const call of authedRequest.mock.calls) {
-      expect(call[0]).toBe("PUT");
-      // An underride, or an override appended to the end, would sit after
-      // .m.rule.suppress_notices and never fire.
-      expect(call[2]).toEqual({ before: ".m.rule.suppress_notices" });
+    const ids = addPushRule.mock.calls.map((c) => c[2]);
+    expect(ids).toEqual(["dev.zooid.approval_request", "dev.zooid.turn.end", "dev.zooid.error"]);
+    for (const call of addPushRule.mock.calls) {
+      expect(call[0]).toBe("global");
+      expect(call[1]).toBe(PushRuleKind.Override);
     }
   });
 
   it("matches on event type", async () => {
-    const { client, authedRequest } = clientWithHttp();
+    const { client, addPushRule } = clientWithPushRules();
     await ensureAgentPushRules(client);
-    const body = authedRequest.mock.calls[0]![3] as { conditions: unknown[] };
+    const body = addPushRule.mock.calls[0]![3] as { conditions: unknown[] };
     expect(body.conditions).toEqual([
       { kind: "event_match", key: "type", pattern: "dev.zooid.approval_request" },
     ]);
   });
 
   it("puts a sound tweak on turn.end and on nothing else", async () => {
-    const { client, authedRequest } = clientWithHttp();
+    const { client, addPushRule } = clientWithPushRules();
     await ensureAgentPushRules(client);
     const actionsFor = (id: string) =>
-      (authedRequest.mock.calls.find((c) => (c[1] as string).endsWith(id))![3] as { actions: unknown[] })
-        .actions;
+      (addPushRule.mock.calls.find((c) => c[2] === id)![3] as { actions: unknown[] }).actions;
 
     expect(actionsFor("dev.zooid.turn.end")).toEqual([
       "notify",
@@ -326,16 +319,16 @@ describe("agent push rules", () => {
   });
 
   it("is idempotent — re-running does not duplicate", async () => {
-    const { client, authedRequest } = clientWithHttp();
+    const { client, addPushRule } = clientWithPushRules();
     (client as unknown as Record<string, unknown>).pushRules = {
       global: { override: AGENT_RULE_IDS.map((id) => ({ rule_id: id, enabled: true, actions: ["notify"] })) },
     };
     await ensureAgentPushRules(client);
-    expect(authedRequest).not.toHaveBeenCalled();
+    expect(addPushRule).not.toHaveBeenCalled();
   });
 
   it("reads and writes the enabled state per rule", async () => {
-    const { client } = clientWithHttp();
+    const { client } = clientWithPushRules();
     (client as unknown as Record<string, unknown>).pushRules = {
       global: { override: [{ rule_id: "dev.zooid.turn.end", enabled: false, actions: ["notify"] }] },
     };

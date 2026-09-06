@@ -4,11 +4,11 @@ import {
   EventType,
   PushRuleActionName,
   PushRuleKind,
+  TweakName,
   type IPushRule,
   type MatrixClient,
   type MatrixEvent,
 } from "matrix-js-sdk";
-import { clientExt } from "@/client/client-ext";
 
 export type RoomNotifState = "all" | "mentions" | "mute";
 export type GlobalNotifMode = "all" | "mentions";
@@ -160,25 +160,33 @@ export async function removeKeyword(client: MatrixClient, keyword: string): Prom
   await refresh(client);
 }
 
-const SUPPRESS_NOTICES = ".m.rule.suppress_notices";
-
 export const AGENT_RULES = [
-  { id: "dev.zooid.approval_request", actions: ["notify", { set_tweak: "highlight", value: true }] },
-  { id: "dev.zooid.turn.end", actions: ["notify", { set_tweak: "sound", value: "default" }] },
-  { id: "dev.zooid.error", actions: ["notify"] },
+  {
+    id: "dev.zooid.approval_request",
+    actions: [PushRuleActionName.Notify, { set_tweak: TweakName.Highlight, value: true }],
+  },
+  {
+    id: "dev.zooid.turn.end",
+    actions: [PushRuleActionName.Notify, { set_tweak: TweakName.Sound, value: "default" }],
+  },
+  { id: "dev.zooid.error", actions: [PushRuleActionName.Notify] },
 ] as const;
 
 export const AGENT_RULE_IDS = AGENT_RULES.map((r) => r.id);
 
 /**
- * Install the agent-event push rules as overrides positioned *before*
- * .m.rule.suppress_notices.
+ * Install the agent-event push rules as plain overrides.
  *
- * Positioning is the whole point. That default override matches on
- * content.msgtype alone without conditioning on event type — an underride, or
- * an override appended to the end (all `client.addPushRule` can produce),
- * would sit behind it and silently never fire the moment any `dev.zooid.*`
- * event's content happens to carry a `msgtype` key at all.
+ * No `before`/`after` — the Matrix spec forbids positioning a rule relative
+ * to a server-default rule ID (Tuwunel: `M_INVALID_PARAM: Can't place a push
+ * rule relatively to a server-default rule`), which is what an earlier
+ * version of this function tried against `.m.rule.suppress_notices`.
+ *
+ * It turns out not to matter. `.m.rule.suppress_notices` matches only on
+ * `content.msgtype == "m.notice"`, and none of these three event types ever
+ * carry a `msgtype` key — so that rule (and every other default override,
+ * none of which match a `dev.zooid.*` custom event's shape) simply never
+ * matches ours, regardless of where in the override list it lands.
  */
 export async function ensureAgentPushRules(client: MatrixClient): Promise<void> {
   const existing = new Set((client.pushRules?.global?.override ?? []).map((r) => r.rule_id));
@@ -186,15 +194,10 @@ export async function ensureAgentPushRules(client: MatrixClient): Promise<void> 
   if (missing.length === 0) return;
 
   for (const rule of missing) {
-    await clientExt(client).http.authedRequest(
-      "PUT",
-      `/pushrules/global/override/${rule.id}`,
-      { before: SUPPRESS_NOTICES },
-      {
-        conditions: [{ kind: ConditionKind.EventMatch, key: "type", pattern: rule.id }],
-        actions: rule.actions,
-      },
-    );
+    await client.addPushRule("global", PushRuleKind.Override, rule.id, {
+      conditions: [{ kind: ConditionKind.EventMatch, key: "type", pattern: rule.id }],
+      actions: [...rule.actions],
+    });
   }
   await refresh(client);
 }
