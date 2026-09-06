@@ -27,6 +27,8 @@ export interface SwScope {
   handlers: Record<string, (event: unknown) => void>;
   showNotification: ReturnType<typeof vi.fn>;
   openWindow: ReturnType<typeof vi.fn>;
+  claim: ReturnType<typeof vi.fn>;
+  skipWaiting: ReturnType<typeof vi.fn>;
   setClients(clients: SwClient[]): void;
   dispatch(type: string, event: Record<string, unknown>): Promise<void>;
 }
@@ -42,6 +44,7 @@ export function loadServiceWorker(): SwScope {
   let clients: SwClient[] = [];
   const showNotification = vi.fn().mockResolvedValue(undefined);
   const openWindow = vi.fn().mockResolvedValue(undefined);
+  const claim = vi.fn().mockResolvedValue(undefined);
 
   const self = {
     addEventListener: (type: string, fn: (event: unknown) => void) => {
@@ -51,6 +54,7 @@ export function loadServiceWorker(): SwScope {
     clients: {
       matchAll: vi.fn(async () => clients),
       openWindow,
+      claim,
     },
     skipWaiting: vi.fn(),
   };
@@ -62,6 +66,8 @@ export function loadServiceWorker(): SwScope {
     handlers,
     showNotification,
     openWindow,
+    claim,
+    skipWaiting: self.skipWaiting,
     setClients(next) {
       clients = next;
     },

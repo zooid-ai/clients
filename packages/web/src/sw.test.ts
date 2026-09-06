@@ -82,6 +82,30 @@ describe("push", () => {
     expect(sw.showNotification.mock.calls[0]![1]).toMatchObject({ silent: false });
   });
 
+  it("takes over on install rather than waiting for every tab to close", async () => {
+    // Without this, a fix to push handling stays inert for anyone who keeps a
+    // tab open — and this worker caches nothing, so there is no reason to wait.
+    await sw.dispatch("install", {});
+    expect(sw.skipWaiting).toHaveBeenCalled();
+    await sw.dispatch("activate", {});
+    expect(sw.claim).toHaveBeenCalled();
+  });
+
+  it("keeps agent notifications on screen — a banner that auto-dismisses while you're away is one you never saw", async () => {
+    sw.setClients([]);
+    for (const type of ["dev.zooid.turn.end", "dev.zooid.approval_request", "dev.zooid.error"]) {
+      sw.showNotification.mockClear();
+      await sw.dispatch("push", pushEvent({ ...message, type, body: undefined }));
+      expect(sw.showNotification.mock.calls[0]![1]).toMatchObject({ requireInteraction: true });
+    }
+  });
+
+  it("lets an ordinary chat message stay transient, as chat does everywhere else", async () => {
+    sw.setClients([]);
+    await sw.dispatch("push", pushEvent(message));
+    expect(sw.showNotification.mock.calls[0]![1]).toMatchObject({ requireInteraction: false });
+  });
+
   it("does not ask for a cue when the tweak is absent", async () => {
     const client = makeSwClient();
     sw.setClients([client]);

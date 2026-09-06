@@ -1,5 +1,6 @@
 // Zooid service worker. Deliberately imports no application code — no bundler
-// integration, no build-graph coupling. Two events, nothing else.
+// integration, no build-graph coupling. Push and notificationclick, plus the
+// two lifecycle handlers that make an update to those actually take effect.
 
 const ROOM_PATH = /\/room\/([^/?#]+)/;
 
@@ -11,6 +12,18 @@ function roomOf(url) {
 function titleFor(p) {
   return p.room_name || p.room_id;
 }
+
+// The three agent events are, by definition, things you asked to be told
+// about *while you are away* — a turn you're waiting on, an approval that
+// blocks the agent, an error. A macOS/Chrome banner auto-dismisses after a
+// few seconds, so an unattended one is a notification that never happened.
+// These stay on screen until dismissed; ordinary chat messages keep the
+// transient default, as chat everywhere else does.
+const PERSISTENT_TYPES = [
+  "dev.zooid.approval_request",
+  "dev.zooid.turn.end",
+  "dev.zooid.error",
+];
 
 function bodyFor(p) {
   // Agent events carry no prose. Rendering `${sender}: ${undefined}` is the
@@ -26,6 +39,14 @@ function bodyFor(p) {
       return p.sender_display_name ? `${p.sender_display_name}: ${p.body || ""}` : p.body || "New message";
   }
 }
+
+// This worker caches nothing and holds no versioned app state — it answers
+// push and notificationclick, nothing else. So there is no half-updated app
+// to guard against, and the default "wait until every tab of the origin is
+// closed" only means a shipped fix to notification behaviour sits inert for
+// anyone who keeps a tab open indefinitely. Take over immediately instead.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
 self.addEventListener("push", (event) => {
   event.waitUntil(
@@ -62,6 +83,7 @@ self.addEventListener("push", (event) => {
         tag: payload.event_id,
         data: { roomId: payload.room_id },
         silent: cued || !payload.sound,
+        requireInteraction: PERSISTENT_TYPES.indexOf(payload.type) !== -1,
       });
     })(),
   );
