@@ -12,6 +12,7 @@ import {
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { useNotifications } from "@/hooks/use-notifications";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
+import { useClearRoomNotifications } from "@/hooks/use-clear-room-notifications";
 import { useServiceWorkerMessages } from "@/hooks/use-service-worker-messages";
 import {
   Sidebar,
@@ -64,6 +65,7 @@ export function LoggedInView({ pushGatewayUrl, vapidPublicKey }: LoggedInViewPro
   useServiceWorkerMessages();
   const roomMatch = useMatch("/room/:roomId");
   const roomId = roomMatch?.params.roomId ?? null;
+  useClearRoomNotifications(roomId);
 
   useEffect(() => {
     client.startClient({ initialSyncLimit: 10 }).catch(() => {});
