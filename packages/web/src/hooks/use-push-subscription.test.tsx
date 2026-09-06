@@ -38,7 +38,7 @@ beforeEach(() => {
   client.setPusher = setPusher;
   client.getPushers = vi.fn().mockResolvedValue({ pushers: [] });
   client.removePusher = vi.fn().mockResolvedValue({});
-  client.http = { authedRequest: vi.fn().mockResolvedValue({}) };
+  client.addPushRule = vi.fn().mockResolvedValue({});
   client.getPushRules = vi.fn().mockResolvedValue({ global: { override: [] } });
   client.setPushRules = vi.fn();
   MatrixClientPeg.injectClientForTest(client as never);
@@ -101,11 +101,11 @@ describe("usePushSubscription", () => {
     await act(async () => {
       await result.current.enable();
     });
-    const client = MatrixClientPeg.get() as unknown as { http: { authedRequest: ReturnType<typeof vi.fn> } };
-    expect(client.http.authedRequest).toHaveBeenCalledWith(
-      "PUT",
-      "/pushrules/global/override/dev.zooid.approval_request",
-      { before: ".m.rule.suppress_notices" },
+    const client = MatrixClientPeg.get() as unknown as { addPushRule: ReturnType<typeof vi.fn> };
+    expect(client.addPushRule).toHaveBeenCalledWith(
+      "global",
+      "override",
+      "dev.zooid.approval_request",
       expect.anything(),
     );
   });

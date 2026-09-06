@@ -68,20 +68,6 @@ interface ClientExt {
   setPusher(pusher: WebPushPusher): Promise<object>;
   getPushers(): Promise<{ pushers: MatrixPusher[] }>;
   removePusher(pushkey: string, appId: string): Promise<object>;
-  /**
-   * `client.addPushRule` calls `authedRequest` with `queryParams: undefined`
-   * (matrix-js-sdk client.js:7571), so a rule added through it always lands
-   * after `.m.rule.suppress_notices` and can never fire. This is the raw
-   * seam that can pass `before`.
-   */
-  http: {
-    authedRequest<T>(
-      method: string,
-      path: string,
-      queryParams?: Record<string, string>,
-      body?: unknown,
-    ): Promise<T>;
-  };
 }
 
 export function clientExt(client: MatrixClient): ClientExt {
