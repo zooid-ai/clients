@@ -1,3 +1,9 @@
+// happy-dom implements no IndexedDB. `fake-indexeddb/auto` installs an
+// in-memory implementation on globalThis so matrix-js-sdk's real
+// LocalIndexedDBStoreBackend runs unmodified in tests — object stores,
+// transactions, SyncAccumulator serialization and all. Tests that don't care
+// about persistence still inject a MemoryStore via setStoreFactoryForTest().
+import "fake-indexeddb/auto";
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { http, HttpResponse } from "msw";
@@ -55,6 +61,29 @@ if (
 ) {
   Element.prototype.scrollIntoView = function scrollIntoView() {};
 }
+
+// Give every test a clean IndexedDB, mirroring the ephemeral guarantee a
+// fresh MemoryStore used to provide. Without this, a real IndexedDBStore
+// created via MatrixClientPeg.set()/restoreFromStorage() (rather than
+// injected via setStoreFactoryForTest()) persists its first sync to disk —
+// the store's own write-throttle guard (WRITE_DELAY_MS) is bypassed on the
+// very first save — and a later test reusing the same synthetic user id
+// would resume from a stale `since` token that this suite's MSW stubs never
+// answer (stubStartClient/stubSyncWithRooms hang any `since` request
+// forever), hanging the test instead of failing it.
+function deleteIndexedDbDatabase(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = globalThis.indexedDB.deleteDatabase(name);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => resolve();
+  });
+}
+
+afterEach(async () => {
+  const dbs = await globalThis.indexedDB.databases();
+  await Promise.all(dbs.map((db) => (db.name ? deleteIndexedDbDatabase(db.name) : null)));
+});
 
 export const mswServer = setupServer();
 
