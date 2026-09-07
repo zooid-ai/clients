@@ -3,6 +3,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "./app";
 import { MatrixClientPeg } from "./client/peg";
+import { setGlobalSearchEnabled } from "./client/feature-flags";
 import { mswServer, relaxUnhandled, stubStartClient } from "../test/setup";
 
 const HS = "https://h.example";
@@ -21,6 +22,7 @@ describe("<App />", () => {
   afterEach(() => {
     MatrixClientPeg.reset();
     localStorage.clear();
+    setGlobalSearchEnabled(true);
   });
 
   it("renders <Login /> when no session is in storage", async () => {
@@ -83,5 +85,21 @@ describe("<App />", () => {
     await user.click(await screen.findByRole("menuitem", { name: /log out/i }));
     await waitFor(() => expect(screen.queryByTestId("logged-in-view")).toBeNull());
     expect(localStorage.getItem("zoon:session")).toBeNull();
+  });
+
+  it("does not route /search when global search is off", async () => {
+    setGlobalSearchEnabled(false);
+    localStorage.setItem(
+      "zoon:session",
+      JSON.stringify({
+        homeserverUrl: HS,
+        accessToken: "tok",
+        userId: "@alice:h.example",
+        deviceId: "DEV1",
+      }),
+    );
+    render(<App config={{ homeserverUrl: HS }} initialRoute="/search" />);
+    await waitFor(() => expect(screen.getByTestId("logged-in-view")).toBeInTheDocument());
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 });

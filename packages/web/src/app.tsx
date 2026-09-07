@@ -15,7 +15,7 @@ import { AuthCallback } from "./components/auth/auth-callback";
 import { Login } from "./components/auth/login";
 import { Register } from "./components/auth/register";
 import { SearchPageRoute } from "./components/structures/search-page";
-import { SpaceHomeRoute } from "./components/structures/space-home";
+import { LobbyRoute } from "./components/structures/lobby";
 import { InvitesPage } from "./components/structures/invites-page";
 import { LoggedInView } from "./components/structures/logged-in-view";
 import { RoomView } from "./components/structures/room-view";
@@ -128,7 +128,7 @@ function AppRoutes({ config }: { config: AppConfig }) {
           )
         }
       >
-        <Route index element={<SpaceHomeRoute />} />
+        <Route index element={<LobbyRoute />} />
         <Route path="room/:roomId" element={<RoomView />} />
         <Route path="search" element={<SearchPageRoute />} />
         <Route path="invites" element={<InvitesPage />} />

@@ -4,12 +4,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { injectStateEvent, makeFakeClient, makeRoom, mkMatrixEvent } from "../../../../test/factories";
 import { MatrixClientPeg } from "../../../client/peg";
+import { setGlobalSearchEnabled } from "../../../client/feature-flags";
 import { Sidebar } from "./sidebar";
 
 const me = "@me:h.example";
 const spaceId = "!space:h.example";
 
-afterEach(() => MatrixClientPeg.reset());
+afterEach(() => {
+  MatrixClientPeg.reset();
+  setGlobalSearchEnabled(true);
+});
 
 function seed(opts: { myPL?: number } = {}) {
   const client = makeFakeClient({ userId: me });
@@ -77,6 +81,52 @@ function seed(opts: { myPL?: number } = {}) {
   (client as unknown as { getAccountData: (t: string) => unknown }).getAccountData = (t) =>
     t === "m.direct" ? { getContent: () => ({ "@bob:h.example": ["!dm:h.example"] }) } : null;
   MatrixClientPeg.injectClientForTest(client);
+}
+
+/** Extends seed() with a subspace child, itself containing one joined room. */
+function seedWithSubspace() {
+  seed();
+  const client = MatrixClientPeg.safeGet()!;
+  const space = client.getRoom(spaceId)!;
+  const guides = makeRoom("!guides:h.example", { client, myUserId: me });
+  Object.assign(guides as unknown as Record<string, unknown>, {
+    name: "Guides",
+    isSpaceRoom: () => true,
+  });
+  const doc = makeRoom("!doc:h.example", { client, myUserId: me });
+  (doc as unknown as { name: string }).name = "onboarding";
+
+  injectStateEvent(
+    space,
+    mkMatrixEvent({
+      roomId: spaceId,
+      sender: "@admin:h.example",
+      type: "m.space.child",
+      stateKey: "!guides:h.example",
+      content: { via: ["h.example"] },
+    }),
+  );
+  injectStateEvent(
+    guides,
+    mkMatrixEvent({
+      roomId: "!guides:h.example",
+      sender: "@admin:h.example",
+      type: "m.space.child",
+      stateKey: "!doc:h.example",
+      content: { via: ["h.example"] },
+    }),
+  );
+
+  const rooms: Record<string, unknown> = {
+    [spaceId]: space,
+    "!general:h.example": client.getRoom("!general:h.example"),
+    "!dm:h.example": client.getRoom("!dm:h.example"),
+    "!fav:h.example": client.getRoom("!fav:h.example"),
+    "!guides:h.example": guides,
+    "!doc:h.example": doc,
+  };
+  (client as unknown as { getRoom: (id: string) => unknown }).getRoom = (id) => rooms[id] ?? null;
+  (client as unknown as { getRooms: () => unknown[] }).getRooms = () => Object.values(rooms);
 }
 
 describe("<Sidebar>", () => {
@@ -261,5 +311,70 @@ describe("<Sidebar> unread rollups", () => {
     // Rollup badge for Rooms section shows "3" (general); the per-room
     // badge in <RoomRow> also shows "3". Both are inside the Rooms region.
     expect(within(rooms).getAllByText("3").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("<Sidebar> Lobby row", () => {
+  it("pins a Lobby row above the sections", () => {
+    seed();
+    render(
+      <MemoryRouter initialEntries={["/room/!general:h.example"]}>
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    const lobby = screen.getByRole("link", { name: /lobby/i });
+    expect(lobby).toHaveAttribute("href", "/");
+  });
+
+  it("has no Lobby row in home scope", () => {
+    seed();
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Sidebar scope={{ kind: "home" }} workforceSpaceId={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("link", { name: /lobby/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("<Sidebar> subspaces", () => {
+  // Today a subspace renders as a RoomRow that navigates into a room with no timeline.
+  it("renders a subspace as its own section, not as a room row", () => {
+    seedWithSubspace(); // adds !guides:h.example (isSpaceRoom: true) as an m.space.child
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    const guides = screen.getByRole("region", { name: /guides/i });
+    expect(guides).toBeInTheDocument();
+
+    const rooms = screen.getByRole("region", { name: "Rooms" });
+    expect(within(rooms).queryByText("Guides")).not.toBeInTheDocument();
+  });
+});
+
+describe("<Sidebar> search row", () => {
+  it("shows Search as a link, not as a text input", () => {
+    setGlobalSearchEnabled(true);
+    seed();
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: /search/i })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /search/i })).not.toBeInTheDocument();
+  });
+
+  it("hides Search entirely when global search is off", () => {
+    setGlobalSearchEnabled(false);
+    seed();
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Sidebar scope={{ kind: "space", spaceId }} workforceSpaceId={spaceId} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("link", { name: /search/i })).not.toBeInTheDocument();
   });
 });

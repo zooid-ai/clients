@@ -6,10 +6,39 @@ interface SectionProps {
   action?: ReactNode;
   children: ReactNode;
   defaultExpanded?: boolean;
+  /** When set, expand/collapse state persists to localStorage under this key. */
+  storageKey?: string;
 }
 
-export function Section({ title, action, children, defaultExpanded = true }: SectionProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+function readPersisted(storageKey: string | undefined, fallback: boolean): boolean {
+  if (!storageKey) return fallback;
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw === "expanded") return true;
+    if (raw === "collapsed") return false;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function Section({ title, action, children, defaultExpanded = true, storageKey }: SectionProps) {
+  const [expanded, setExpanded] = useState(() => readPersisted(storageKey, defaultExpanded));
+
+  const toggle = () => {
+    setExpanded((e) => {
+      const next = !e;
+      if (storageKey) {
+        try {
+          localStorage.setItem(storageKey, next ? "expanded" : "collapsed");
+        } catch {
+          // A private window throws on access — a section that fails to
+          // remember must still render.
+        }
+      }
+      return next;
+    });
+  };
 
   return (
     <section role="region" aria-label={title} className="flex flex-col">
@@ -17,7 +46,7 @@ export function Section({ title, action, children, defaultExpanded = true }: Sec
         <button
           type="button"
           aria-label={`toggle ${title} section`}
-          onClick={() => setExpanded((e) => !e)}
+          onClick={toggle}
           className="flex items-center gap-1"
         >
           {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}

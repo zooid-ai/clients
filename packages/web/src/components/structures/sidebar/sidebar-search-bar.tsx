@@ -1,22 +1,18 @@
-import { useLocation, useNavigate } from "react-router-dom";
-import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useGlobalSearchEnabled } from "../../../client/feature-flags";
 
-/** Launcher styled as a search input: focus/click → /search; disabled while on /search. */
+/** A link row, not a fake filter: navigates to /search. Hidden when the flag is off. */
 export function SidebarSearchBar() {
-  const navigate = useNavigate();
-  const onSearchPage = useLocation().pathname === "/search";
+  if (!useGlobalSearchEnabled()) return null;
 
   return (
-    <div className="px-2 py-2">
-      <Input
-        readOnly
-        disabled={onSearchPage}
-        aria-label="search"
-        placeholder="Search…"
-        className="cursor-pointer"
-        onClick={() => navigate("/search")}
-        onFocus={() => navigate("/search")}
-      />
-    </div>
+    <Link
+      to="/search"
+      className="flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+    >
+      <Search className="size-4 shrink-0" aria-hidden />
+      Search
+    </Link>
   );
 }

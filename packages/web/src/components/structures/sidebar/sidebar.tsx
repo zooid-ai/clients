@@ -1,6 +1,7 @@
-import { Plus } from "lucide-react";
+import { Flag, Plus } from "lucide-react";
 import { type Room } from "matrix-js-sdk";
 import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDirectRooms } from "../../../hooks/use-direct-rooms";
 import { useFavoriteRooms } from "../../../hooks/use-favorite-rooms";
@@ -25,8 +26,26 @@ interface SidebarProps {
   workforceSpaceId: string | null;
 }
 
+/** A subspace's own joined room children, one collapsible Section, depth bounded at one level. */
+function SubspaceSection({ room }: { room: Room }) {
+  const children = useSpaceChildren(room.roomId).filter((r) => !r.isSpaceRoom());
+  const unread = useSectionUnread(children);
+  return (
+    <Section
+      title={room.name || room.roomId}
+      storageKey={`section:${room.roomId}`}
+      action={<UnreadBadge total={unread.total} highlight={unread.highlight} />}
+    >
+      {children.map((r) => (
+        <RoomRow key={r.roomId} room={r} />
+      ))}
+    </Section>
+  );
+}
+
 export function Sidebar({ scope, workforceSpaceId }: SidebarProps) {
   const spaceId = scope.kind === "space" ? scope.spaceId : "";
+  const { pathname } = useLocation();
   const favorites = useFavoriteRooms();
   const dms = useDirectRooms();
   const spaceChildren = useSpaceChildren(spaceId);
@@ -47,8 +66,12 @@ export function Sidebar({ scope, workforceSpaceId }: SidebarProps) {
     }
     return out;
   };
+  const subspaces = spaceChildren.filter((r) => r.isSpaceRoom());
+  // This is the bug fix — the space branch used to pass subspaces through as room rows.
   const roomSource =
-    scope.kind === "space" ? spaceChildren : allRooms.filter((r) => !r.isSpaceRoom());
+    scope.kind === "space"
+      ? spaceChildren.filter((r) => !r.isSpaceRoom())
+      : allRooms.filter((r) => !r.isSpaceRoom());
   const favList = claim(favorites);
   const dmList = claim(dms);
   const roomList = claim(roomSource);
@@ -63,6 +86,17 @@ export function Sidebar({ scope, workforceSpaceId }: SidebarProps) {
     // room names. SidebarContent already supplies the outer overflow.
     <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-2 p-2">
+        {scope.kind === "space" ? (
+          <Link
+            to="/"
+            className={`flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-sidebar-accent ${
+              pathname === "/" ? "bg-sidebar-accent text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            <Flag className="size-4 shrink-0" aria-hidden />
+            Lobby
+          </Link>
+        ) : null}
         <SidebarSearchBar />
         <InvitesSection />
         <Section
@@ -102,6 +136,9 @@ export function Sidebar({ scope, workforceSpaceId }: SidebarProps) {
             <RoomRow key={r.roomId} room={r} />
           ))}
         </Section>
+        {subspaces.map((r) => (
+          <SubspaceSection key={r.roomId} room={r} />
+        ))}
         <Section
           title="DMs"
           defaultExpanded={false}

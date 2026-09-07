@@ -28,6 +28,7 @@ export interface HierarchyResponse {
     room_id: string;
     name?: string;
     topic?: string;
+    avatar_url?: string;
     num_joined_members?: number;
     room_type?: string;
   }>;

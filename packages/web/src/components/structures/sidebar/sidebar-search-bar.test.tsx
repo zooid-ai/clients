@@ -1,6 +1,7 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setGlobalSearchEnabled } from "../../../client/feature-flags";
 import { SidebarSearchBar } from "./sidebar-search-bar";
 
 function Probe() {
@@ -10,21 +11,34 @@ function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="*" element={<><SidebarSearchBar /><Probe /></>} />
+        <Route
+          path="*"
+          element={
+            <>
+              <SidebarSearchBar />
+              <Probe />
+            </>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
 }
 
+afterEach(() => setGlobalSearchEnabled(true));
+
 describe("SidebarSearchBar", () => {
-  it("navigates to /search when clicked", () => {
+  it("renders as a link to /search, not a text input", () => {
+    setGlobalSearchEnabled(true);
     renderAt("/");
-    fireEvent.click(screen.getByLabelText("search"));
-    expect(screen.getByTestId("path").textContent).toBe("/search");
+    const link = screen.getByRole("link", { name: /search/i });
+    expect(link).toHaveAttribute("href", "/search");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("is disabled while already on the search page", () => {
-    renderAt("/search");
-    expect(screen.getByLabelText("search")).toBeDisabled();
+  it("renders nothing when global search is off", () => {
+    setGlobalSearchEnabled(false);
+    renderAt("/");
+    expect(screen.queryByRole("link", { name: /search/i })).not.toBeInTheDocument();
   });
 });
