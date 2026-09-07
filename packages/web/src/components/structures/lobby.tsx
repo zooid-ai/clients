@@ -72,7 +72,7 @@ export function Lobby({
           placeholder="Filter…"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          className="max-w-xs"
+          className="flex-1"
         />
         <div className="ml-auto flex items-center gap-1">
           <Button
