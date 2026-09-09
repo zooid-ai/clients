@@ -16,11 +16,13 @@ export function EventTile({
   onReplyInThread,
   onViewThread,
   disableThreadAffordances,
+  truncateBody,
 }: {
   event: MatrixEvent;
   onReplyInThread?: (eventId: string) => void;
   onViewThread?: (eventId: string) => void;
   disableThreadAffordances?: boolean;
+  truncateBody?: boolean;
 }) {
   if (event.getType() === "m.room.message") {
     const msgtype = (event.getContent() as { msgtype?: string }).msgtype;
@@ -33,6 +35,7 @@ export function EventTile({
         onReplyInThread={onReplyInThread}
         onViewThread={onViewThread}
         disableThreadAffordances={disableThreadAffordances}
+        truncateBody={truncateBody}
       />
     );
   }
