@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tokenizeTopic } from "./autolink";
+import { splitUrls, tokenizeTopic } from "./autolink";
 
 describe("tokenizeTopic", () => {
   it("returns a single text token for plain prose", () => {
@@ -50,5 +50,37 @@ describe("tokenizeTopic", () => {
 
   it("returns an empty array for an empty string", () => {
     expect(tokenizeTopic("")).toEqual([]);
+  });
+});
+
+describe("splitUrls", () => {
+  it("returns an empty array for an empty string", () => {
+    expect(splitUrls("")).toEqual([]);
+  });
+
+  it("returns a single text part for plain prose", () => {
+    expect(splitUrls("just some words")).toEqual([{ text: "just some words", url: null }]);
+  });
+
+  it("extracts an https url as its own part", () => {
+    expect(splitUrls("see https://zoon.eco for docs")).toEqual([
+      { text: "see ", url: null },
+      { text: "https://zoon.eco", url: "https://zoon.eco" },
+      { text: " for docs", url: null },
+    ]);
+  });
+
+  it("extracts multiple urls in order", () => {
+    expect(splitUrls("http://a.io and https://b.io")).toEqual([
+      { text: "http://a.io", url: "http://a.io" },
+      { text: " and ", url: null },
+      { text: "https://b.io", url: "https://b.io" },
+    ]);
+  });
+
+  it("treats a url spanning the whole string as a single part", () => {
+    expect(splitUrls("https://zoon.eco")).toEqual([
+      { text: "https://zoon.eco", url: "https://zoon.eco" },
+    ]);
   });
 });

@@ -10,6 +10,28 @@ export type TopicToken =
 // fall back into the surrounding text token).
 const TOKEN_RE = /(https?:\/\/[^\s]+)|(#[A-Za-z0-9_-]+(?::[A-Za-z0-9.-]+)?)/g;
 
+const URL_RE = /https?:\/\/[^\s]+/g;
+
+/**
+ * Split plain text into alternating prose and URL segments so links can be
+ * rendered as anchors. Unlike `tokenizeTopic`, this has no notion of channel
+ * references — it's for message bodies, which are already split on mentions
+ * separately.
+ */
+export function splitUrls(text: string): { text: string; url: string | null }[] {
+  if (!text) return [];
+  const parts: { text: string; url: string | null }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    const idx = m.index ?? 0;
+    if (idx > last) parts.push({ text: text.slice(last, idx), url: null });
+    parts.push({ text: m[0], url: m[0] });
+    last = idx + m[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), url: null });
+  return parts;
+}
+
 export function tokenizeTopic(topic: string): TopicToken[] {
   if (!topic) return [];
   const tokens: TopicToken[] = [];
