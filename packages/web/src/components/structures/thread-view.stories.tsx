@@ -8,6 +8,7 @@ const ME = "@me:h.example";
 const AGENT = "@architect.acme:h.example";
 const ROOM_ID = "!demo:h.example";
 const ROOT_EVENT_ID = "$root-message";
+const LONG_ROOT_EVENT_ID = "$long-root-message";
 
 function seedThreadWithLongCommand() {
   const client = makeFakeClient({ userId: ME });
@@ -62,6 +63,46 @@ function seedThreadWithLongCommand() {
   MatrixClientPeg.injectClientForTest(client);
 }
 
+function seedThreadWithLongRootMessage() {
+  const client = makeFakeClient({ userId: ME });
+  const room = makeRoom(ROOM_ID, { client, myUserId: ME });
+  (client as unknown as { getRoom: (id: string) => unknown }).getRoom = (id: string) =>
+    id === ROOM_ID ? room : null;
+
+  const paragraphs = [
+    "Here's the plan for the migration, broken into steps so we can review each one independently before merging.",
+    "First, we need to add the new column as nullable so existing rows aren't affected during the rollout window.",
+    "Second, backfill the column in batches, throttled so it doesn't compete with production traffic for I/O.",
+    "Third, flip the application code to read from the new column behind a feature flag we can roll back quickly.",
+    "Fourth, once the flag has been at 100% for a week with no incidents, drop the old column and remove the flag.",
+    "Let me know if any step looks risky and we can split it further or add an extra verification pass.",
+  ];
+  const rootEvent = mkMatrixEvent({
+    roomId: ROOM_ID,
+    sender: AGENT,
+    type: "m.room.message",
+    content: { msgtype: "m.text", body: paragraphs.join("\n\n") },
+    eventId: LONG_ROOT_EVENT_ID,
+  });
+  pushTimelineEvent(room, rootEvent);
+
+  pushTimelineEvent(
+    room,
+    mkMatrixEvent({
+      roomId: ROOM_ID,
+      sender: ME,
+      type: "m.room.message",
+      content: {
+        msgtype: "m.text",
+        body: "sounds good, go ahead",
+        "m.relates_to": { rel_type: "m.thread", event_id: LONG_ROOT_EVENT_ID },
+      },
+    }),
+  );
+
+  MatrixClientPeg.injectClientForTest(client);
+}
+
 const meta = {
   title: "Structures/ThreadView",
   component: ThreadView,
@@ -75,6 +116,16 @@ export const WithLongCommand: Story = {
   args: { roomId: ROOM_ID, rootEventId: ROOT_EVENT_ID, onBack: () => {} },
   render: (args) => {
     seedThreadWithLongCommand();
+    return <ThreadView {...args} />;
+  },
+};
+
+// The thread root text itself (not a tool card) is long enough to need the
+// "See more" clamp — regression coverage for issue #27.
+export const WithLongRootMessage: Story = {
+  args: { roomId: ROOM_ID, rootEventId: LONG_ROOT_EVENT_ID, onBack: () => {} },
+  render: (args) => {
+    seedThreadWithLongRootMessage();
     return <ThreadView {...args} />;
   },
 };

@@ -101,7 +101,7 @@ export function ThreadView({
         <ol className="flex flex-col gap-0.5 px-4 py-3">
           {root ? (
             <li className="contents">
-              <EventTile event={root} disableThreadAffordances />
+              <EventTile event={root} disableThreadAffordances truncateBody />
             </li>
           ) : rootPending ? (
             <li>

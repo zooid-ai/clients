@@ -18,6 +18,7 @@ import { MessageTimestamp } from "./message-timestamp";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
 import { ReadReceiptsRow } from "./read-receipts-row";
+import { TruncatedBody } from "./truncated-body";
 import {
   EditButton,
   DeleteButton,
@@ -50,6 +51,8 @@ export interface TextMessageProps {
   onViewThread?: (eventId: string) => void;
   /** When true, hide thread preview + "Reply in thread" button (used inside ThreadView). */
   disableThreadAffordances?: boolean;
+  /** When true, clamp a long body to a few lines with a "See more" toggle (thread root). */
+  truncateBody?: boolean;
 }
 
 function InlineReply({ event }: { event: MatrixEvent }) {
@@ -103,6 +106,7 @@ export function TextMessage({
   onReplyInThread,
   onViewThread,
   disableThreadAffordances,
+  truncateBody,
 }: TextMessageProps) {
   const client = useSyncExternalStore(
     (cb) => MatrixClientPeg.subscribe(cb),
@@ -224,8 +228,8 @@ export function TextMessage({
             onCancel={() => setEditing(false)}
           />
         ) : (
-          <>
-            {hasFormatted ? (
+          (() => {
+            const body = hasFormatted ? (
               <FormattedMessageBody html={displayFormattedBody!} roomId={roomId} />
             ) : (
               <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
@@ -240,8 +244,9 @@ export function TextMessage({
                   <span className="ml-1 text-xs text-muted-foreground">(edited)</span>
                 )}
               </p>
-            )}
-          </>
+            );
+            return truncateBody ? <TruncatedBody>{body}</TruncatedBody> : body;
+          })()
         )}
 
         <ReactionsRow roomId={roomId} eventId={eventId} reactions={reactions} />
