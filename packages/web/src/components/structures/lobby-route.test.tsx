@@ -50,3 +50,25 @@ it("renders the Lobby when a space is active", () => {
   renderWithContext({ spaceId, activeScope: { kind: "space", spaceId } });
   expect(screen.getByRole("heading", { name: "Acme" })).toBeInTheDocument();
 });
+
+/**
+ * Regression: the context's `spaceId` field is only the VITE_WORKFORCE_SPACE
+ * alias lookup, distinct from `activeScope` — which can already be sitting on
+ * a space via the ZNC008 single-joined-space fallback even when that alias
+ * never resolved. A build without the env var set correctly (or one deployed
+ * to a server whose workforce space isn't named `dev`) leaves `spaceId` null
+ * while `activeScope` is a real space — the Lobby must follow `activeScope`.
+ */
+it("renders the Lobby from activeScope even when the workforce-space lookup is null", () => {
+  const spaceId = "!space:h.example";
+  const client = makeFakeClient({ userId: me });
+  const space = makeRoom(spaceId, { client, myUserId: me });
+  Object.assign(space as unknown as Record<string, unknown>, { name: "Acme", isSpaceRoom: () => true });
+  Object.assign(client as unknown as Record<string, unknown>, {
+    getRoom: () => space,
+    getRoomHierarchy: async () => ({ rooms: [] }),
+  });
+  MatrixClientPeg.injectClientForTest(client);
+  renderWithContext({ spaceId: null, activeScope: { kind: "space", spaceId } });
+  expect(screen.getByRole("heading", { name: "Acme" })).toBeInTheDocument();
+});

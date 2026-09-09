@@ -13,11 +13,19 @@ import type { LoggedInOutletContext } from "./logged-in-view";
 import type { Scope } from "./sidebar/scope";
 import { SpaceChildRow } from "./space-child-row";
 
-/** Route wrapper: resolves the active space from the logged-in Outlet context. */
+/**
+ * Route wrapper: resolves the active space from the logged-in Outlet context.
+ * Reads `activeScope`, not the context's separate `spaceId` — that field is
+ * only the workforce-space lookup (VITE_WORKFORCE_SPACE), which is null
+ * whenever that alias doesn't resolve, even though `activeScope` may already
+ * be sitting on a space via the ZNC008 single-joined-space fallback. Using
+ * the raw field here stranded the Lobby on "Pick a room" while the sidebar,
+ * which already reads `activeScope`, showed that space's rooms correctly.
+ */
 export function LobbyRoute() {
-  const { spaceId, setScope } = useOutletContext<LoggedInOutletContext>();
-  if (!spaceId) return <EmptyRoom />;
-  return <Lobby spaceId={spaceId} setScope={setScope} />;
+  const { activeScope, setScope } = useOutletContext<LoggedInOutletContext>();
+  if (activeScope.kind !== "space") return <EmptyRoom />;
+  return <Lobby spaceId={activeScope.spaceId} setScope={setScope} />;
 }
 
 export function Lobby({
