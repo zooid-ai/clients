@@ -1,5 +1,11 @@
 # @zooid/zoon-web
 
+## 0.12.0
+
+### Minor Changes
+
+- Add service worker push notifications with pusher lifecycle, agent push rules, and a turn-end sound; a space lobby landing page acting as the space's directory; paste/drop attachments with a composer preview tray; clickable links and a See more toggle for long thread roots in plain-text messages; and persisted Matrix sync state in IndexedDB. Fix notification dismissal timing, push-rule self-healing and positioning, the Lobby's active-scope filtering, and the Lobby filter input layout.
+
 ## 0.11.0
 
 ### Minor Changes
