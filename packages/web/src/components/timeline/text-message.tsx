@@ -3,6 +3,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { MatrixEvent } from "matrix-js-sdk";
 import { MessageSquare, TriangleAlertIcon } from "lucide-react";
 import { senderColor, splitMentions } from "@/lib/sender";
+import { splitUrls } from "@/lib/autolink";
 import { UserAvatar } from "@/components/user-avatar";
 import { MatrixClientPeg } from "@/client/peg";
 import { useSyncExternalStore } from "react";
@@ -41,6 +42,33 @@ function MentionPill({ userId, roomId }: { userId: string; roomId: string }) {
     >
       @{name}
     </span>
+  );
+}
+
+/** Render a plain-text message body with both mentions and links highlighted. */
+function renderBody(body: string, roomId: string) {
+  return splitMentions(body).map((seg, i) =>
+    seg.userId ? (
+      <MentionPill key={i} userId={seg.userId} roomId={roomId} />
+    ) : (
+      <span key={i}>
+        {splitUrls(seg.text).map((part, j) =>
+          part.url ? (
+            <a
+              key={j}
+              href={part.url}
+              target="_blank"
+              rel="noopener noreferrer ugc"
+              className="text-primary underline"
+            >
+              {part.url}
+            </a>
+          ) : (
+            <span key={j}>{part.text}</span>
+          ),
+        )}
+      </span>
+    ),
   );
 }
 
@@ -92,7 +120,9 @@ function InlineReply({ event }: { event: MatrixEvent }) {
           <FormattedMessageBody html={c.formatted_body!} roomId={roomId} />
         </div>
       ) : (
-        <span className="line-clamp-2 min-w-0 flex-1 text-foreground/80">{c.body ?? ""}</span>
+        <span className="line-clamp-2 min-w-0 flex-1 text-foreground/80">
+          {renderBody(c.body ?? "", roomId)}
+        </span>
       )}
     </div>
   );
@@ -229,13 +259,7 @@ export function TextMessage({
               <FormattedMessageBody html={displayFormattedBody!} roomId={roomId} />
             ) : (
               <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
-                {splitMentions(displayBody).map((seg, i) =>
-                  seg.userId ? (
-                    <MentionPill key={i} userId={seg.userId} roomId={roomId} />
-                  ) : (
-                    <span key={i}>{seg.text}</span>
-                  ),
-                )}
+                {renderBody(displayBody, roomId)}
                 {edited && (
                   <span className="ml-1 text-xs text-muted-foreground">(edited)</span>
                 )}
