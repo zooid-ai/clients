@@ -31,6 +31,32 @@ function seedSpace(content: unknown) {
 }
 
 describe("useWorkforce", () => {
+  it("merges every workstation's roster (one state key per daemon)", () => {
+    const { space } = seedSpace(null);
+    for (const [key, id] of [
+      ["cloud", "@cloud.product:h.example"],
+      ["laptop", "@laptop.coding:h.example"],
+    ] as const) {
+      injectStateEvent(
+        space,
+        mkMatrixEvent({
+          roomId: spaceId,
+          sender: `@${key}:h.example`,
+          type: "dev.zooid.workforce",
+          stateKey: key,
+          content: { version: 1, agents: [{ user_id: id, name: id }] },
+        }),
+      );
+    }
+    const { result } = renderHook(() => useWorkforce(spaceId));
+    expect(result.current.ready).toBe(true);
+    expect(result.current.agents.map((a) => a.userId)).toEqual([
+      "@cloud.product:h.example",
+      "@laptop.coding:h.example",
+    ]);
+    expect(result.current.isAgent("@laptop.coding:h.example")).toBe(true);
+  });
+
   it("returns ready=false and isAgent fail-open when no roster present", () => {
     seedSpace(null);
     const { result } = renderHook(() => useWorkforce(spaceId));
