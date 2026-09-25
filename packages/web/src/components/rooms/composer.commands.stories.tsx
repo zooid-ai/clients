@@ -48,6 +48,10 @@ export const WithAdvertisedCommands: Story = {
   args: { roomId: ROOM_ID, threadRootEventId: THREAD_ROOT },
   render: (args) => {
     seedCommandRoom();
-    return <Composer {...args} />;
+    return (
+      <div className="pt-48">
+        <Composer {...args} />
+      </div>
+    );
   },
 };

@@ -26,10 +26,10 @@ function seed() {
   MatrixClientPeg.injectClientForTest(client);
 }
 
-function Demo(props: Partial<React.ComponentProps<typeof MessageInput>>) {
+function Demo({ wrapperClassName, ...props }: Partial<React.ComponentProps<typeof MessageInput>> & { wrapperClassName?: string }) {
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="w-[28rem]">
+    <div className={"w-[28rem] " + (wrapperClassName ?? "")}>
       <MessageInput roomId={ROOM_ID} onSubmit={() => {}} error={error} onError={setError} {...props} />
     </div>
   );
@@ -54,7 +54,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = { render: () => <Demo /> };
 
 export const MentionSuggestions: Story = {
-  render: () => <Demo className="pt-32" />,
+  render: () => <Demo wrapperClassName="pt-32" />,
   play: async ({ canvasElement }) => {
     await userEvent.type(await within(canvasElement).findByRole("textbox", { name: /message/i }), "cc @a");
   },

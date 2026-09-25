@@ -378,7 +378,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       )}
       {header}
       {ac && matches.length > 0 && (
-        <div className={cn("absolute bottom-full mb-1", suggestionsClassName)}>
+        <div className={cn("absolute bottom-full z-30 mb-1", suggestionsClassName)}>
           {ac.mode === "slash" ? (
             <SlashCommandList
               commands={slashMatches}

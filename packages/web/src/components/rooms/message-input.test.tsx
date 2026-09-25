@@ -76,6 +76,12 @@ describe("<MessageInput />", () => {
     expect(screen.queryByLabelText("Attach file")).toBeNull();
   });
 
+  it("stacks the suggestion dropup above timeline hover bars", async () => {
+    const { user, input } = renderInput({ threadScoped: true });
+    await user.type(input, "/");
+    expect(screen.getByRole("listbox").closest(".absolute")).toHaveClass("z-30");
+  });
+
   it("does not submit while disabled", () => {
     renderInput({ disabled: true, placeholder: "Pick a room first" });
     expect(screen.getByRole("textbox", { name: /message/i })).toBeDisabled();
