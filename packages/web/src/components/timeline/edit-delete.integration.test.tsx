@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MatrixClientPeg } from "@/client/peg";
 import {
@@ -39,7 +40,9 @@ describe("message edit", () => {
     const { client, event } = setup();
     render(<TextMessage event={event} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /edit message/i }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^edit$/i }));
     const textarea = screen.getByRole("textbox", { name: /edit message/i });
     fireEvent.change(textarea, { target: { value: "hello world" } });
     fireEvent.keyDown(textarea, { key: "Enter" });
@@ -59,10 +62,13 @@ describe("message edit", () => {
     });
   });
 
-  it("does not offer Edit on someone else's message", () => {
+  it("does not offer Edit on someone else's message", async () => {
     const { event } = setup({ sender: "@alice:h.example" });
     render(<TextMessage event={event} />);
-    expect(screen.queryByRole("button", { name: /edit message/i })).toBeNull();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    await screen.findByRole("menuitem", { name: /copy link/i });
+    expect(screen.queryByRole("menuitem", { name: /^edit$/i })).toBeNull();
   });
 
   it("renders the latest edit with an (edited) marker", () => {
@@ -93,7 +99,9 @@ describe("message delete", () => {
     const { client, event } = setup();
     render(<TextMessage event={event} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /delete message/i }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^delete$/i }));
     // shadcn AlertDialog confirm action
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 

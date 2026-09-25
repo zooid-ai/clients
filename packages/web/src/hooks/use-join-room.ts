@@ -10,14 +10,14 @@ export function useJoinRoom() {
   const [error, setError] = useState<string | null>(null);
 
   const joinRoom = useCallback(
-    async (idOrAlias: string): Promise<string | null> => {
+    async (idOrAlias: string, opts?: { search?: string }): Promise<string | null> => {
       const client = MatrixClientPeg.safeGet();
       if (!client) return null;
       setJoining(true);
       setError(null);
       try {
         const room = await clientExt(client).joinRoom(idOrAlias);
-        navigate(`/room/${room.roomId}`);
+        navigate(`/room/${room.roomId}${opts?.search ?? ""}`);
         return room.roomId;
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not join that room.");

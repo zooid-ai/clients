@@ -3,16 +3,20 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { Composer } from "../rooms/composer";
 import { TypingIndicator } from "../rooms/typing-indicator";
 import { PlanBoard } from "../timeline/plan-board";
+import { NotJoinedRoom } from "./not-joined-room";
 import { ThreadView } from "./thread-view";
 import { TimelinePanel } from "./timeline-panel";
 import { useMarkRead } from "../../hooks/use-mark-read";
 import { useTyping } from "../../hooks/use-typing";
 import { usePlan } from "../../hooks/use-plan";
+import { useRoomKnown } from "../../hooks/use-room-known";
 
 export function RoomView() {
   const { roomId } = useParams<{ roomId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const threadRootEventId = searchParams.get("thread");
+  const highlightEventId = searchParams.get("event") ?? undefined;
+  const known = useRoomKnown(roomId ?? "");
   const typingUserIds = useTyping(roomId ?? "");
   useMarkRead(roomId ?? "");
 
@@ -40,6 +44,10 @@ export function RoomView() {
   }
 
   if (!roomId) return <div>No room selected</div>;
+  if (!known) {
+    const qs = searchParams.toString();
+    return <NotJoinedRoom roomId={roomId} search={qs ? `?${qs}` : ""} />;
+  }
   return (
     <article className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1">
@@ -48,6 +56,7 @@ export function RoomView() {
             roomId={roomId}
             rootEventId={threadRootEventId}
             onBack={exitThread}
+            highlightEventId={highlightEventId}
           />
         ) : (
           <TimelinePanel
