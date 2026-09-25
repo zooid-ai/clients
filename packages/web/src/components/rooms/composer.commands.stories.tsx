@@ -49,7 +49,7 @@ export const WithAdvertisedCommands: Story = {
   render: (args) => {
     seedCommandRoom();
     return (
-      <div className="pt-48">
+      <div className="flex min-h-80 flex-col justify-end">
         <Composer {...args} />
       </div>
     );

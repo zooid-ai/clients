@@ -54,7 +54,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = { render: () => <Demo /> };
 
 export const MentionSuggestions: Story = {
-  render: () => <Demo wrapperClassName="pt-32" />,
+  render: () => <Demo wrapperClassName="flex min-h-72 flex-col justify-end" />,
   play: async ({ canvasElement }) => {
     await userEvent.type(await within(canvasElement).findByRole("textbox", { name: /message/i }), "cc @a");
   },
