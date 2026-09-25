@@ -2,7 +2,14 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { MatrixClientPeg } from "@/client/peg";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { QuoteCardView } from "@/components/timeline/quote-card";
@@ -83,6 +90,7 @@ export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMe
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">Pick a room to share this message to.</DialogDescription>
         </DialogHeader>
         <Input
           aria-label="Search rooms"

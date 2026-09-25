@@ -6,7 +6,9 @@ const noop = () => {};
 
 const AGENT_HTML = `<p>Here is the fix:</p>
 <pre><code>const link = buildThreadLink(origin, target);</code></pre>
-<ul><li>Room in the path</li><li>Thread in the query</li><li>Event only when it differs</li></ul>`;
+<ul><li>Room in the path</li><li>Thread in the query</li><li>Event only when it differs</li></ul>
+<p>Every link round-trips through <code>parseThreadLink</code>, so a link copied from one message opens the same thread and reply in another tab.</p>
+<ol><li>Copy the link from the message menu.</li><li>Paste it in any room.</li><li>Open it: the thread opens and the reply is highlighted.</li></ol>`;
 
 const LONG_BODY = Array.from(
   { length: 14 },

@@ -26,6 +26,10 @@ function seed(opts: { failSend?: boolean } = {}) {
     ["!backend:h.example", "backend"],
     ["!design:h.example", "design"],
     ["!ops:h.example", "ops"],
+    ["!infra:h.example", "infra"],
+    ["!support:h.example", "support"],
+    ["!random:h.example", "random"],
+    ["!docs:h.example", "docs"],
   ]) {
     const room = makeRoom(id, { client, myUserId: ME });
     room.name = name;

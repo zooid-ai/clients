@@ -82,8 +82,11 @@ export const QuoteMessage: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const agentText = await canvas.findByText(/Links carry the room in the path/, { selector: "p" });
-    await userEvent.hover(agentText);
+    // The bar shows on CSS :hover, which synthetic pointer events don't trigger,
+    // so skip the pointer-events check and click the ⋯ button directly.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await user.hover(agentText);
     const buttons = await canvas.findAllByRole("button", { name: /more actions/i });
-    await userEvent.click(buttons[1]);
+    await user.click(buttons[1]);
   },
 };
