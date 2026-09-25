@@ -4,6 +4,15 @@ export interface RuntimeConfig {
   global_search?: boolean;
   push_gateway_url?: string;
   vapid_public_key?: string;
+  /** Alias localpart of the workforce space (no `#`, no server name). Defaults to `dev`. */
+  workforce_space?: string;
+}
+
+export const DEFAULT_WORKFORCE_SPACE = "dev";
+
+/** A well-formed alias localpart: non-empty, no `#`, no `:` (server name), no whitespace. */
+export function isValidWorkforceSpace(value: string): boolean {
+  return /^[^\s#:]+$/.test(value);
 }
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig | null> {
@@ -17,6 +26,7 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig | null> {
     if (typeof json.global_search === "boolean") out.global_search = json.global_search;
     if (typeof json.push_gateway_url === "string") out.push_gateway_url = json.push_gateway_url;
     if (typeof json.vapid_public_key === "string") out.vapid_public_key = json.vapid_public_key;
+    if (typeof json.workforce_space === "string") out.workforce_space = json.workforce_space;
     return out;
   } catch {
     return null;
