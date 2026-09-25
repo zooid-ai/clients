@@ -44,4 +44,32 @@ describe("useActiveSpaceId", () => {
       (client as unknown as { joinRoom: ReturnType<typeof vi.fn> }).joinRoom,
     ).toHaveBeenCalledWith("#dev:h.example");
   });
+
+  it("resolves a custom localpart", async () => {
+    clientWithAlias("#acme:h.example", "!acme:h.example", true);
+    const { result } = renderHook(() => useActiveSpaceId("acme", "h.example"));
+    await waitFor(() => expect(result.current.spaceId).toBe("!acme:h.example"));
+  });
+
+  it("is ready with no space, without any lookup, for an invalid localpart", async () => {
+    const client = clientWithAlias("#dev:h.example", "!s:h.example", true);
+    const lookup = vi.spyOn(
+      client as unknown as { getRoomIdForAlias: () => Promise<unknown> },
+      "getRoomIdForAlias",
+    );
+    const { result } = renderHook(() => useActiveSpaceId("#dev:h.example", "h.example"));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.spaceId).toBeNull();
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("is ready with no space when joining fails", async () => {
+    const client = clientWithAlias("#dev:h.example", "!s:h.example", false);
+    (client as unknown as { joinRoom: () => Promise<unknown> }).joinRoom = vi.fn(async () => {
+      throw new Error("forbidden");
+    });
+    const { result } = renderHook(() => useActiveSpaceId("dev", "h.example"));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.spaceId).toBeNull();
+  });
 });

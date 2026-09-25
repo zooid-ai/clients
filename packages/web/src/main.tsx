@@ -28,6 +28,7 @@ async function bootstrap() {
     defaultIdpLabel: runtime?.default_idp_label ?? null,
     pushGatewayUrl: runtime?.push_gateway_url,
     vapidPublicKey: runtime?.vapid_public_key,
+    workforceSpace: runtime?.workforce_space,
   };
   if (import.meta.env.DEV) {
     // Affordance for Playwright e2e (and ZNC002 features) to call SDK methods

@@ -16,7 +16,7 @@ import { SpaceChildRow } from "./space-child-row";
 /**
  * Route wrapper: resolves the active space from the logged-in Outlet context.
  * Reads `activeScope`, not the context's separate `spaceId` — that field is
- * only the workforce-space lookup (VITE_WORKFORCE_SPACE), which is null
+ * only the workforce-space lookup (runtime `workforce_space`), which is null
  * whenever that alias doesn't resolve, even though `activeScope` may already
  * be sitting on a space via the ZNC008 single-joined-space fallback. Using
  * the raw field here stranded the Lobby on "Pick a room" while the sidebar,

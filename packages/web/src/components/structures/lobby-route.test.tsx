@@ -52,11 +52,11 @@ it("renders the Lobby when a space is active", () => {
 });
 
 /**
- * Regression: the context's `spaceId` field is only the VITE_WORKFORCE_SPACE
+ * Regression: the context's `spaceId` field is only the configured workforce-space
  * alias lookup, distinct from `activeScope` — which can already be sitting on
  * a space via the ZNC008 single-joined-space fallback even when that alias
- * never resolved. A build without the env var set correctly (or one deployed
- * to a server whose workforce space isn't named `dev`) leaves `spaceId` null
+ * never resolved. A deployment whose runtime config names a space that
+ * doesn't exist on the server (or omits it while the space isn't `dev`) leaves `spaceId` null
  * while `activeScope` is a real space — the Lobby must follow `activeScope`.
  */
 it("renders the Lobby from activeScope even when the workforce-space lookup is null", () => {
