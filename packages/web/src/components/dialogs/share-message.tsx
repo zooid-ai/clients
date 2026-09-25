@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MatrixClientPeg } from "@/client/peg";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { MessageInput, type MessageInputHandle, type MessageInputSubmit } from "@/components/rooms/message-input";
 import { QuoteCardView } from "@/components/timeline/quote-card";
 import { useSafeNavigate } from "@/hooks/use-safe-navigate";
 import { buildQuoteContent } from "@/lib/matrix/quote";
 import type { QuoteDraft } from "@/lib/quote-draft-store";
+import { RoomPicker } from "./room-picker";
 
 type SendEvent = (
   roomId: string,
@@ -34,9 +34,8 @@ export interface ShareMessageDialogProps {
 export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMessageDialogProps) {
   const navigate = useSafeNavigate();
   const client = MatrixClientPeg.safeGet();
-  const [query, setQuery] = useState("");
   const [targetId, setTargetId] = useState<string | null>(null);
-  const [comment, setComment] = useState("");
+  const inputRef = useRef<MessageInputHandle>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,35 +48,31 @@ export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMe
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [client, open],
   );
-  const q = query.trim().toLowerCase();
-  const filtered = q ? rooms.filter((r) => r.name.toLowerCase().includes(q)) : rooms;
 
   function close() {
-    setQuery("");
     setTargetId(null);
-    setComment("");
     setError(null);
     onOpenChange(false);
   }
 
-  async function send() {
-    if (!client || !draft || !targetId) return;
+  async function send({ body, mentionUserIds }: MessageInputSubmit) {
+    if (!client || !draft || !targetId || sending) return;
     setSending(true);
-    setError(null);
     try {
       const content = buildQuoteContent({
-        comment,
+        comment: body,
         quote: draft.quote,
         senderName: draft.senderName,
         origin: window.location.origin,
       });
+      // buildQuoteContent leaves m.mentions empty; only the comment's own mentions
+      // go in, so the quoted text never pings anyone.
+      if (mentionUserIds.length > 0) content["m.mentions"] = { user_ids: mentionUserIds };
       await (client.sendEvent as unknown as SendEvent).call(client, targetId, null, "m.room.message", content);
       const name = client.getRoom(targetId)?.name ?? "room";
       const to = `/room/${encodeURIComponent(targetId)}`;
       toast.success(`Shared to ${name}`, { action: { label: "View", onClick: () => navigate(to) } });
       close();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSending(false);
     }
@@ -92,27 +87,7 @@ export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMe
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="sr-only">Pick a room to share this message to.</DialogDescription>
         </DialogHeader>
-        <Input
-          aria-label="Search rooms"
-          placeholder="Search rooms"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div role="listbox" aria-label="Rooms" className="max-h-48 overflow-y-auto rounded-md border border-border">
-          {filtered.map((r) => (
-            <button
-              key={r.roomId}
-              type="button"
-              role="option"
-              aria-selected={r.roomId === targetId}
-              onClick={() => setTargetId(r.roomId)}
-              className="block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-muted aria-selected:bg-accent aria-selected:text-accent-foreground"
-            >
-              {r.name}
-            </button>
-          ))}
-          {filtered.length === 0 && <p className="px-3 py-2 text-sm text-muted-foreground">No rooms match</p>}
-        </div>
+        <RoomPicker rooms={rooms} value={targetId} onChange={setTargetId} />
         {draft && (
           <QuoteCardView
             senderId={draft.quote.sender}
@@ -125,23 +100,25 @@ export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMe
             replyCount={draft.quote.thread?.reply_count}
           />
         )}
-        <Textarea
-          aria-label="Comment"
-          placeholder="Add a comment (optional)"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={2}
+        <MessageInput
+          ref={inputRef}
+          roomId={targetId ?? ""}
+          disabled={!targetId}
+          placeholder={targetId ? "Add a comment (optional)" : "Pick a room first"}
+          ariaLabel="Comment"
+          slashCommands={false}
+          attachments={false}
+          sendButton={false}
+          allowEmpty
+          error={error}
+          onError={setError}
+          onSubmit={send}
         />
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
         <DialogFooter>
           <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button disabled={!targetId || sending} onClick={() => void send()}>
+          <Button disabled={!targetId || sending} onClick={() => void inputRef.current?.submit()}>
             Send
           </Button>
         </DialogFooter>
