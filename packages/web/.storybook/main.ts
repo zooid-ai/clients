@@ -1,11 +1,10 @@
 import type { StorybookConfig } from "@storybook/react-vite";
 import { mergeConfig } from "vite";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
 
-const EVENTS_POLYFILL = resolve(
-  import.meta.dirname,
-  "../../../../node_modules/.pnpm/events@3.3.0/node_modules/events/events.js",
-);
+// The trailing slash forces a node_modules lookup; bare "events" resolves to
+// Node's builtin.
+const EVENTS_POLYFILL = createRequire(import.meta.url).resolve("events/");
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
