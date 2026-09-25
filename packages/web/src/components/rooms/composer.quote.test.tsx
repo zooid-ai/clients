@@ -59,6 +59,15 @@ describe("<Composer /> quote chip", () => {
     expect(getQuoteDraft(roomId, null)).toBeNull();
   });
 
+  it("always sends m.mentions, empty when the comment mentions nobody", async () => {
+    const { send } = setup();
+    render(<Composer roomId={roomId} />);
+    act(() => setQuoteDraft(roomId, null, { quote, senderName: "Coding" }));
+    await userEvent.setup().type(screen.getByRole("textbox", { name: /message/i }), "see this{Enter}");
+    await waitFor(() => expect(send).toHaveBeenCalled());
+    expect(send.mock.calls[0][3]["m.mentions"]).toEqual({});
+  });
+
   it("sends a bare quote with an empty comment", async () => {
     const { send } = setup();
     render(<Composer roomId={roomId} />);

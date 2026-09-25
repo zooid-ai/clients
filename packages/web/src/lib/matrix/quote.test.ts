@@ -108,6 +108,7 @@ describe("buildQuoteContent", () => {
         "> line one\n" +
         ">\n" +
         "> line two",
+      "m.mentions": {},
       [QUOTE_FIELD]: ref,
     });
   });

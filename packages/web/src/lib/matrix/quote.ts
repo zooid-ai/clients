@@ -89,6 +89,9 @@ export function buildQuoteContent(opts: {
       opts.comment.trim(),
       buildQuoteFallback(opts.quote, opts.senderName, opts.origin),
     ),
+    // Always present, even empty: the quoted text must never be scanned for
+    // mentions by receivers that fall back to the plain body.
+    "m.mentions": {},
     [QUOTE_FIELD]: opts.quote,
   };
 }

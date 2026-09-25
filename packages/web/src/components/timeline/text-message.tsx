@@ -223,13 +223,23 @@ export function TextMessage({
   const draftThreadId = disableThreadAffordances ? threadRootOf(event) : null;
 
   function currentQuoteRef() {
+    // Quoting a quote snapshots what the author wrote, not the raw fallback
+    // text; with no comment, the nested snapshot stands in.
+    const content = quote
+      ? comment
+        ? { msgtype: c.msgtype, body: comment }
+        : quote.snapshot
+      : { msgtype: c.msgtype, body: displayBody, format: c.format, formatted_body: displayFormattedBody };
     return buildQuoteRef(event, {
-      content: { msgtype: c.msgtype, body: displayBody, format: c.format, formatted_body: displayFormattedBody },
+      content,
       replyCount: disableThreadAffordances ? 0 : totalCount,
     });
   }
   function copy(text: string, message: string) {
-    void navigator.clipboard.writeText(text).then(() => toast.success(message));
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(message),
+      () => toast.error("Couldn't copy: clipboard access denied"),
+    );
   }
   const handleCopyLink = () =>
     copy(buildThreadLink(window.location.origin, threadTargetForEvent(event)), "Link copied");

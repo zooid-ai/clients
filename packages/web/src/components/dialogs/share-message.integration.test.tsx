@@ -79,6 +79,8 @@ describe("<ShareMessageDialog />", () => {
     expect([roomId, thread, type]).toEqual(["!backend:h.example", null, "m.room.message"]);
     expect(content.body.startsWith("fyi\n\n> Coding · ")).toBe(true);
     expect(content[QUOTE_FIELD]).toEqual(quote);
+    // Empty, not absent: receivers must not scan the quoted text for mentions.
+    expect(content["m.mentions"]).toEqual({});
     expect(toast.success).toHaveBeenCalledWith(
       "Shared to backend",
       expect.objectContaining({ action: expect.objectContaining({ label: "View" }) }),

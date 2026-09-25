@@ -8,7 +8,7 @@ import { getQuoteDraft, resetQuoteDrafts } from "@/lib/quote-draft-store";
 import { makeFakeClient, makeMatrixEvent, makeRoom, pushTimelineEvent } from "../../../test/factories";
 import { TextMessage } from "./text-message";
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const roomId = "!r:h.example";
 const me = "@me:h.example";
@@ -106,6 +106,16 @@ describe("⋯ menu", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("copy me"));
   });
 
+  it("toasts an error when the clipboard is denied", async () => {
+    const { event } = setup({ msgtype: "m.text", body: "copy me" });
+    render(<TextMessage event={event} />);
+    const user = await openMenu();
+    writeText.mockRejectedValue(new Error("denied"));
+    await user.click(await screen.findByRole("menuitem", { name: /copy text/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   it("Quote in the room timeline drafts into the room composer", async () => {
     const { event } = setup({ msgtype: "m.text", body: "quote me" });
     render(<TextMessage event={event} />);
@@ -147,6 +157,22 @@ describe("quote messages", () => {
     const card = screen.getByRole("link", { name: /quoted message/i });
     expect(within(card).getByText("the quoted answer")).toBeInTheDocument();
     expect(screen.queryByText(/2026-09-25 14:42 UTC/)).toBeNull();
+  });
+
+  it("quoting a quote snapshots the comment, not the fallback", async () => {
+    const { event } = setup({ msgtype: "m.text", body: `my take\n\n${fallback}`, [QUOTE_FIELD]: quote });
+    render(<TextMessage event={event} />);
+    const user = await openMenu();
+    await user.click(await screen.findByRole("menuitem", { name: /^quote$/i }));
+    expect(getQuoteDraft(roomId, null)?.quote.snapshot).toEqual({ msgtype: "m.text", body: "my take" });
+  });
+
+  it("quoting a bare quote snapshots the nested snapshot", async () => {
+    const { event } = setup({ msgtype: "m.text", body: fallback, [QUOTE_FIELD]: quote });
+    render(<TextMessage event={event} />);
+    const user = await openMenu();
+    await user.click(await screen.findByRole("menuitem", { name: /^quote$/i }));
+    expect(getQuoteDraft(roomId, null)?.quote.snapshot).toEqual(quote.snapshot);
   });
 
   it("editing a quote edits the comment and keeps the fallback", async () => {
