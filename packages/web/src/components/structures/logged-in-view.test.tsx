@@ -127,6 +127,11 @@ describe("<LoggedInView /> workforce space from runtime config", () => {
           ? HttpResponse.json({ room_id: roomId, servers: ["h.example"] })
           : HttpResponse.json({ errcode: "M_NOT_FOUND", error: "no alias" }, { status: 404 });
       }),
+      // The alias can resolve before sync has delivered the room, so the
+      // client joins it; the joined room then arrives via sync.
+      http.post(`${HS}/_matrix/client/v3/join/:alias`, ({ params }) =>
+        HttpResponse.json({ room_id: aliases[decodeURIComponent(String(params.alias))] }),
+      ),
     );
     localStorage.setItem(
       "zoon:session",
