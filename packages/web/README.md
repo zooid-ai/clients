@@ -25,7 +25,7 @@ One published bundle serves every deployment. Host-specific settings live in a s
 
 If the value is malformed, or the alias can't be resolved or joined, login still succeeds: the client opens the only joined space if there is exactly one, and Home otherwise.
 
-The build-time `VITE_WORKFORCE_SPACE` variable is removed and is ignored. To migrate a vhost that was built with it:
+The build-time workforce-space environment variable is removed and is ignored. To migrate a vhost that was built with it:
 
 1. Deploy a bundle that includes this change. Until `config.json` names a space the client uses `dev` (or the sole joined space, if `#dev` doesn't resolve).
 2. Add `"workforce_space": "<the value you used to build with>"` to that vhost's `config.json`.
