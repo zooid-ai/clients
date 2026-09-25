@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { MatrixClient } from "matrix-js-sdk";
-import { Pencil, Trash2 } from "lucide-react";
+import { Copy, Forward, Link2, MoreHorizontal, Pencil, Quote, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,38 +9,73 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface EditButtonProps {
-  onClick: () => void;
-}
+const BAR_BUTTON =
+  "inline-flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground";
 
-export function EditButton({ onClick }: EditButtonProps) {
+export function ShareButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      aria-label="Edit message"
-      onClick={onClick}
-      className="inline-flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-    >
-      <Pencil className="size-4" />
+    <button type="button" aria-label={label} onClick={onClick} className={BAR_BUTTON}>
+      <Forward className="size-4" />
     </button>
   );
 }
 
-interface DeleteButtonProps {
-  onClick: () => void;
+interface MessageMoreMenuProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCopyLink: () => void;
+  onCopyText: () => void;
+  onQuote: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function DeleteButton({ onClick }: DeleteButtonProps) {
+export function MessageMoreMenu(p: MessageMoreMenuProps) {
   return (
-    <button
-      type="button"
-      aria-label="Delete message"
-      onClick={onClick}
-      className="inline-flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-    >
-      <Trash2 className="size-4" />
-    </button>
+    // modal={false}: a modal menu leaves pointer-events:none on <body> when
+    // an item opens a Dialog (Delete), which freezes the page.
+    <DropdownMenu open={p.open} onOpenChange={p.onOpenChange} modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label="More actions" className={BAR_BUTTON}>
+          <MoreHorizontal className="size-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={p.onCopyLink}>
+          <Link2 />
+          Copy link
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={p.onCopyText}>
+          <Copy />
+          Copy text
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={p.onQuote}>
+          <Quote />
+          Quote
+        </DropdownMenuItem>
+        {(p.onEdit || p.onDelete) && <DropdownMenuSeparator />}
+        {p.onEdit && (
+          <DropdownMenuItem onSelect={p.onEdit}>
+            <Pencil />
+            Edit
+          </DropdownMenuItem>
+        )}
+        {p.onDelete && (
+          <DropdownMenuItem variant="destructive" onSelect={p.onDelete}>
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

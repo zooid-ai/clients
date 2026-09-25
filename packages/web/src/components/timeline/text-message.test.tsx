@@ -88,9 +88,9 @@ describe("<TextMessage /> inline thread preview", () => {
     render(<TextMessage event={rootEvent()} />);
     expect(screen.queryByRole("button", { name: /view thread/i })).not.toBeInTheDocument();
     // Buttons present: bottom "Reply in thread" + top-right toolbar
-    // ("add reaction" + "Reply" icon). ReactionsRow renders nothing
-    // because there are no reactions seeded.
-    expect(screen.getAllByRole("button")).toHaveLength(3);
+    // ("add reaction", "Reply", "Share message" and "More actions").
+    // ReactionsRow renders nothing because there are no reactions seeded.
+    expect(screen.getAllByRole("button")).toHaveLength(5);
   });
 });
 

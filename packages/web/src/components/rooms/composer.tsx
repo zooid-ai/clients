@@ -4,6 +4,9 @@ import { cn } from "@/lib/utils";
 import { displayNameOf, expandMentions, nameOfMember, senderColor } from "@/lib/sender";
 import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
 import { useAvailableCommands } from "../../hooks/use-available-commands";
+import { buildQuoteContent } from "@/lib/matrix/quote";
+import { setQuoteDraft, useQuoteDraft } from "@/lib/quote-draft-store";
+import { QuoteChip } from "./quote-chip";
 import { SlashCommandList } from "./slash-command-list";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
 import { useMembers } from "../../hooks/use-members";
@@ -64,6 +67,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
 
   const threadScoped = Boolean(threadRootEventId);
   const threadId = threadRootEventId ?? null;
+  const quoteDraft = useQuoteDraft(roomId, threadId);
   const typingUserIds = useTyping(roomId);
 
   // Get the last message in the thread for the "Replying to" banner.
@@ -197,11 +201,11 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
 
   async function send(): Promise<void> {
     const body = value.trim();
-    if (!body && attachments.length === 0) return;
+    if (!body && attachments.length === 0 && !quoteDraft) return;
     setError(null);
     try {
       // Slash commands only apply when there's no attachment and the body starts with /
-      if (body && attachments.length === 0) {
+      if (body && attachments.length === 0 && !quoteDraft) {
         const slash = parseSlashCommand(body, { threadScoped });
         if (slash) {
           // matrix-js-sdk auto-adds m.relates_to for m.room.message threaded
@@ -259,9 +263,16 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
         }
       }
 
-      if (body) {
+      if (body || quoteDraft) {
         const { body: expandedBody, userIds: mentionUserIds } = expandMentions(body, members);
-        const content: Record<string, unknown> = { msgtype: "m.text", body: expandedBody };
+        const content: Record<string, unknown> = quoteDraft
+          ? buildQuoteContent({
+              comment: expandedBody,
+              quote: quoteDraft.quote,
+              senderName: quoteDraft.senderName,
+              origin: window.location.origin,
+            })
+          : { msgtype: "m.text", body: expandedBody };
         if (mentionUserIds.length > 0) {
           content["m.mentions"] = { user_ids: mentionUserIds };
         }
@@ -273,6 +284,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
           content,
         );
         setValue("");
+        if (quoteDraft) setQuoteDraft(roomId, threadId, null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -458,6 +470,9 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
           </div>
         </div>
       )}
+      {quoteDraft && (
+        <QuoteChip draft={quoteDraft} onRemove={() => setQuoteDraft(roomId, threadId, null)} />
+      )}
       {ac && matches.length > 0 && (
         <div className="absolute bottom-full left-3 right-3 mb-1">
           {ac.mode === "slash" ? (
@@ -552,7 +567,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
         <button
           type="button"
           onClick={() => void send()}
-          disabled={!value.trim() && attachments.length === 0}
+          disabled={!value.trim() && attachments.length === 0 && !quoteDraft}
           aria-label="Send message"
           className="shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >

@@ -7,6 +7,7 @@ import parse, {
 import { Fragment, type ReactNode } from "react";
 import { senderColor, splitMentions } from "@/lib/sender";
 import { useUserName } from "@/hooks/use-user-name";
+import { MessageLink } from "./message-link";
 
 const ALLOWED_TAGS = [
   "del", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "p", "a",
@@ -62,14 +63,7 @@ export function FormattedMessageBody({ html, roomId }: Props) {
         const href = (node as { attribs?: Record<string, string> }).attribs?.href ?? "";
         const children = (node as { children?: DOMNode[] }).children ?? [];
         return (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer ugc"
-            className="text-primary underline"
-          >
-            {domToReact(children, options)}
-          </a>
+          <MessageLink href={href}>{domToReact(children, options)}</MessageLink>
         );
       }
       if (node.type === "text") {

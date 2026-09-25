@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useThread } from "../../hooks/use-timeline";
 import { useLoadMoreThread } from "../../hooks/use-load-more-thread";
@@ -30,10 +30,13 @@ export function ThreadView({
   roomId,
   rootEventId,
   onBack,
+  highlightEventId,
 }: {
   roomId: string;
   rootEventId: string;
   onBack: () => void;
+  /** A reply to scroll to and flash, from a `?event=` link. */
+  highlightEventId?: string;
 }) {
   const { root, rootPending, events, totalCount } = useThread(roomId, rootEventId);
   const { loadMore, loading, hasMore: canPaginate } = useLoadMoreThread(roomId, rootEventId);
@@ -51,6 +54,27 @@ export function ThreadView({
     if (!el) return;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
   }
+
+  const [flash, setFlash] = useState<string | null>(null);
+  const scrolledForRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!highlightEventId || scrolledForRef.current === highlightEventId) return;
+    if (!events.some((ev) => ev.getId() === highlightEventId)) return; // not loaded: open at the top
+    scrolledForRef.current = highlightEventId;
+    atBottomRef.current = false; // stop the stick-to-bottom effect from yanking us away
+    setFlash(highlightEventId);
+    const el = Array.from(scrollRef.current?.querySelectorAll<HTMLElement>("[data-event-id]") ?? []).find(
+      (n) => n.dataset.eventId === highlightEventId,
+    );
+    el?.scrollIntoView?.({ block: "center" });
+  }, [highlightEventId, events]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 2500);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -116,7 +140,13 @@ export function ThreadView({
           )}
           {events.map((ev) => (
             <li key={ev.getId() ?? `${ev.getType()}-${ev.getTs()}`} className="contents">
-              <EventTile event={ev} disableThreadAffordances />
+              <div
+                data-event-id={ev.getId()}
+                data-highlighted={flash === ev.getId() || undefined}
+                className="rounded-md transition-colors data-[highlighted]:bg-primary/10"
+              >
+                <EventTile event={ev} disableThreadAffordances />
+              </div>
             </li>
           ))}
         </ol>

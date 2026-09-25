@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { MatrixEvent } from "matrix-js-sdk";
 import { MessageSquare, TriangleAlertIcon } from "lucide-react";
+import { toast } from "sonner";
 import { senderColor, splitMentions } from "@/lib/sender";
 import { splitUrls } from "@/lib/autolink";
 import { UserAvatar } from "@/components/user-avatar";
@@ -21,12 +22,18 @@ import { ReactionsRow } from "./reactions-row";
 import { ReadReceiptsRow } from "./read-receipts-row";
 import { TruncatedBody } from "./truncated-body";
 import {
-  EditButton,
-  DeleteButton,
+  ShareButton,
+  MessageMoreMenu,
   DeleteConfirmDialog,
   InlineEdit,
   sendEditEvent,
 } from "./message-actions";
+import { MessageLink } from "./message-link";
+import { QuoteCard } from "./quote-card";
+import { ShareMessageDialog } from "@/components/dialogs/share-message";
+import { buildThreadLink, threadRootOf, threadTargetForEvent } from "@/lib/matrix/permalinks";
+import { buildQuoteRef, joinQuoteFallback, readQuoteRef, splitQuoteFallback } from "@/lib/matrix/quote";
+import { setQuoteDraft } from "@/lib/quote-draft-store";
 
 function AvatarWithPresence({ userId }: { userId: string }) {
   const { presence } = usePresence(userId);
@@ -55,15 +62,9 @@ function renderBody(body: string, roomId: string) {
       <span key={i}>
         {splitUrls(seg.text).map((part, j) =>
           part.url ? (
-            <a
-              key={j}
-              href={part.url}
-              target="_blank"
-              rel="noopener noreferrer ugc"
-              className="text-primary underline"
-            >
+            <MessageLink key={j} href={part.url}>
               {part.url}
-            </a>
+            </MessageLink>
           ) : (
             <span key={j}>{part.text}</span>
           ),
@@ -113,18 +114,22 @@ function InlineReply({ event }: { event: MatrixEvent }) {
     typeof c.formatted_body === "string" &&
     c.formatted_body.length > 0;
   if (c.msgtype !== "m.text" && c.msgtype !== "m.notice") return null;
+  const replyQuote = readQuoteRef(c);
+  const replyText = replyQuote
+    ? splitQuoteFallback(c.body ?? "").comment || "Quoted a message"
+    : (c.body ?? "");
   return (
     <div className="flex items-baseline gap-1.5 text-sm leading-5">
       <span className="shrink-0 font-semibold" style={{ color: senderColor(sender) }}>
         {name}
       </span>
-      {hasFormatted ? (
+      {hasFormatted && !replyQuote ? (
         <div className="line-clamp-2 min-w-0 flex-1 text-foreground/80">
           <FormattedMessageBody html={c.formatted_body!} roomId={roomId} />
         </div>
       ) : (
         <span className="line-clamp-2 min-w-0 flex-1 text-foreground/80">
-          {renderBody(c.body ?? "", roomId)}
+          {renderBody(replyText, roomId)}
         </span>
       )}
     </div>
@@ -163,9 +168,15 @@ export function TextMessage({
     (edited
       ? c.format === "org.matrix.custom.html" && typeof displayFormattedBody === "string" && displayFormattedBody.length > 0
       : c.format === "org.matrix.custom.html" && typeof c.formatted_body === "string" && c.formatted_body.length > 0);
+  const quote = readQuoteRef(c);
+  const { comment, fallback } = quote
+    ? splitQuoteFallback(displayBody)
+    : { comment: displayBody, fallback: "" };
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selected, setSelected] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const isMobile = useIsMobile();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -208,8 +219,27 @@ export function TextMessage({
     isMine ||
     (room?.currentState.maySendRedactionForEvent?.(event, myUserId) ?? false);
 
+  const isThreadRoot = !disableThreadAffordances && totalCount > 0;
+  const draftThreadId = disableThreadAffordances ? threadRootOf(event) : null;
+
+  function currentQuoteRef() {
+    return buildQuoteRef(event, {
+      content: { msgtype: c.msgtype, body: displayBody, format: c.format, formatted_body: displayFormattedBody },
+      replyCount: disableThreadAffordances ? 0 : totalCount,
+    });
+  }
+  function copy(text: string, message: string) {
+    void navigator.clipboard.writeText(text).then(() => toast.success(message));
+  }
+  const handleCopyLink = () =>
+    copy(buildThreadLink(window.location.origin, threadTargetForEvent(event)), "Link copied");
+  const handleCopyText = () => copy(quote ? comment : displayBody, "Text copied");
+  const handleQuote = () =>
+    setQuoteDraft(roomId, draftThreadId, { quote: currentQuoteRef(), senderName });
+
   async function handleSaveEdit(value: string) {
-    if (client) await sendEditEvent(client, roomId, eventId, value);
+    const next = quote ? joinQuoteFallback(value, fallback) : value;
+    if (client) await sendEditEvent(client, roomId, eventId, next);
     setEditing(false);
   }
 
@@ -219,7 +249,7 @@ export function TextMessage({
   }
 
   const actions = (
-    <div className={`absolute -top-3 right-2 z-10 transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto ${selected ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+    <div className={`absolute -top-3 right-2 z-10 transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto ${selected || menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
       <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-1.5 py-1 shadow-sm">
         <ReactionPicker roomId={roomId} eventId={eventId} />
         {!disableThreadAffordances && (
@@ -232,8 +262,16 @@ export function TextMessage({
             <MessageSquare className="size-4" />
           </button>
         )}
-        {isMine && <EditButton onClick={() => setEditing(true)} />}
-        {canRedact && <DeleteButton onClick={() => setConfirmDelete(true)} />}
+        <ShareButton label={isThreadRoot ? "Share thread" : "Share message"} onClick={() => setSharing(true)} />
+        <MessageMoreMenu
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          onCopyLink={handleCopyLink}
+          onCopyText={handleCopyText}
+          onQuote={handleQuote}
+          onEdit={isMine ? () => setEditing(true) : undefined}
+          onDelete={canRedact ? () => setConfirmDelete(true) : undefined}
+        />
       </div>
     </div>
   );
@@ -253,10 +291,20 @@ export function TextMessage({
     >
         {editing ? (
           <InlineEdit
-            initialValue={displayBody}
+            initialValue={quote ? comment : displayBody}
             onSave={handleSaveEdit}
             onCancel={() => setEditing(false)}
           />
+        ) : quote ? (
+          <>
+            {comment && (
+              <p className="min-w-0 whitespace-pre-wrap break-words leading-6 text-foreground text-sm">
+                {renderBody(comment, roomId)}
+                {edited && <span className="ml-1 text-xs text-muted-foreground">(edited)</span>}
+              </p>
+            )}
+            <QuoteCard quote={quote} currentRoomId={roomId} />
+          </>
         ) : (
           (() => {
             const body = hasFormatted ? (
@@ -308,6 +356,12 @@ export function TextMessage({
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         onConfirm={handleConfirmDelete}
+      />
+      <ShareMessageDialog
+        open={sharing}
+        onOpenChange={setSharing}
+        title={isThreadRoot ? "Share thread" : "Share message"}
+        draft={sharing ? { quote: currentQuoteRef(), senderName } : null}
       />
     </MessageTile>
   );
