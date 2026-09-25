@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MatrixClientPeg } from "../client/peg";
 import { clientExt } from "../client/client-ext";
+import { isValidWorkforceSpace } from "../client/runtime-config";
 
 interface ActiveSpace {
   ready: boolean;
@@ -12,6 +13,10 @@ export function useActiveSpaceId(spaceLocalpart: string, serverName: string): Ac
 
   useEffect(() => {
     let cancelled = false;
+    if (!isValidWorkforceSpace(spaceLocalpart)) {
+      setState({ ready: true, spaceId: null });
+      return;
+    }
     void (async () => {
       const client = MatrixClientPeg.safeGet();
       if (!client) return;

@@ -24,6 +24,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { MatrixClientPeg } from "../../client/peg";
+import { DEFAULT_WORKFORCE_SPACE } from "../../client/runtime-config";
 import { useActiveSpaceId } from "../../hooks/use-active-space-id";
 import { useJoinedSpaces } from "../../hooks/use-joined-spaces";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
@@ -43,15 +44,15 @@ export interface LoggedInOutletContext {
 export interface LoggedInViewProps {
   pushGatewayUrl?: string;
   vapidPublicKey?: string;
+  workforceSpace?: string;
 }
 
-export function LoggedInView({ pushGatewayUrl, vapidPublicKey }: LoggedInViewProps = {}) {
+export function LoggedInView({ pushGatewayUrl, vapidPublicKey, workforceSpace }: LoggedInViewProps = {}) {
   const client = useMatrixClient();
   const userId = client.getUserId() ?? "";
   const myName = useUserName(userId);
   const serverName = userId.split(":")[1] ?? userId;
-  const spaceLocalpart =
-    (import.meta.env.VITE_WORKFORCE_SPACE as string | undefined) ?? "dev";
+  const spaceLocalpart = workforceSpace ?? DEFAULT_WORKFORCE_SPACE;
   const { ready: workforceSpaceReady, spaceId } = useActiveSpaceId(spaceLocalpart, serverName);
   const joinedSpaces = useJoinedSpaces();
   const [scope, setScope] = useState<Scope | null>(null);

@@ -26,6 +26,7 @@ export interface AppConfig {
   defaultIdpLabel?: string | null;
   pushGatewayUrl?: string;
   vapidPublicKey?: string;
+  workforceSpace?: string;
 }
 
 export function App({
@@ -122,7 +123,11 @@ function AppRoutes({ config }: { config: AppConfig }) {
         path="/"
         element={
           auth === "logged-in" ? (
-            <LoggedInView pushGatewayUrl={config.pushGatewayUrl} vapidPublicKey={config.vapidPublicKey} />
+            <LoggedInView
+              pushGatewayUrl={config.pushGatewayUrl}
+              vapidPublicKey={config.vapidPublicKey}
+              workforceSpace={config.workforceSpace}
+            />
           ) : (
             <Navigate to="/login" replace />
           )
