@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { userEvent, within } from "storybook/test";
+import { RoomMember } from "matrix-js-sdk";
 import { MatrixClientPeg } from "@/client/peg";
 import { makeFakeClient, makeRoom } from "../../../test/factories";
 import { ShareMessageDialog } from "./share-message";
@@ -33,6 +34,14 @@ function seed(opts: { failSend?: boolean } = {}) {
   ]) {
     const room = makeRoom(id, { client, myUserId: ME });
     room.name = name;
+    // Only the target room has @alice; the source room has @srconly, who must not be offered.
+    const people = id === "!product:h.example" ? [["@srconly:h.example", "srconly"]] : [["@alice:h.example", "alice"], ["@coding:h.example", "coding"]];
+    const joined = people.map(([uid, display]) => {
+      const m = new RoomMember(id, uid);
+      m.name = display;
+      return m;
+    });
+    (room as unknown as { getJoinedMembers: () => RoomMember[] }).getJoinedMembers = () => joined;
     room.updateMyMembership("join");
     (client as unknown as { addRoom(r: unknown): void }).addRoom(room);
   }
@@ -51,33 +60,64 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const NothingSelected: Story = {
+const openPicker = async (canvasElement: HTMLElement, text: string) => {
+  const body = within(canvasElement.ownerDocument.body);
+  await userEvent.type(await body.findByRole("combobox", { name: /search rooms/i }), text);
+  return body;
+};
+
+const pickBackend = async (canvasElement: HTMLElement) => {
+  const body = await openPicker(canvasElement, "back");
+  await userEvent.click(await body.findByRole("option", { name: "backend" }));
+  return body;
+};
+
+export const NoRoom: Story = {
   render: (args) => {
     seed();
     return <ShareMessageDialog {...args} />;
   },
 };
 
-export const RoomSelectedWithComment: Story = {
+export const DropdownOpen: Story = {
   render: (args) => {
     seed();
     return <ShareMessageDialog {...args} />;
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(await body.findByRole("option", { name: "backend" }));
-    await userEvent.type(await body.findByRole("textbox", { name: /comment/i }), "fyi, see the answer below");
+    await openPicker(canvasElement, "s");
   },
 };
 
-export const SearchWithNoMatches: Story = {
+export const NoRoomMatches: Story = {
   render: (args) => {
     seed();
     return <ShareMessageDialog {...args} />;
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
-    await userEvent.type(await body.findByRole("textbox", { name: /search rooms/i }), "zzz");
+    await openPicker(canvasElement, "zzz");
+  },
+};
+
+export const RoomPickedWithMentionSuggestions: Story = {
+  render: (args) => {
+    seed();
+    return <ShareMessageDialog {...args} />;
+  },
+  play: async ({ canvasElement }) => {
+    const body = await pickBackend(canvasElement);
+    await userEvent.type(await body.findByRole("textbox", { name: /comment/i }), "fyi @");
+  },
+};
+
+export const RoomPickedWithComment: Story = {
+  render: (args) => {
+    seed();
+    return <ShareMessageDialog {...args} />;
+  },
+  play: async ({ canvasElement }) => {
+    const body = await pickBackend(canvasElement);
+    await userEvent.type(await body.findByRole("textbox", { name: /comment/i }), "fyi @alice see the answer below");
   },
 };
 
@@ -87,8 +127,7 @@ export const SendError: Story = {
     return <ShareMessageDialog {...args} />;
   },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(await body.findByRole("option", { name: "backend" }));
+    const body = await pickBackend(canvasElement);
     await userEvent.click(await body.findByRole("button", { name: /^send$/i }));
   },
 };

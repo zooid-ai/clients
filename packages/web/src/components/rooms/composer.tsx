@@ -1,44 +1,13 @@
-import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useMemo, useRef, useState } from "react";
-import { ImageUp, Paperclip, SendHorizontal } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { displayNameOf, expandMentions, nameOfMember, senderColor } from "@/lib/sender";
-import { listSlashCommands, parseSlashCommand, type SlashCommandMeta } from "@/lib/slash-commands";
-import { useAvailableCommands } from "../../hooks/use-available-commands";
+import { useMemo, useState } from "react";
+import { parseSlashCommand } from "@/lib/slash-commands";
 import { buildQuoteContent } from "@/lib/matrix/quote";
 import { setQuoteDraft, useQuoteDraft } from "@/lib/quote-draft-store";
 import { QuoteChip } from "./quote-chip";
-import { SlashCommandList } from "./slash-command-list";
+import { MessageInput, type MessageInputSubmit } from "./message-input";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
-import { useMembers } from "../../hooks/use-members";
 import { useThreadPreview } from "../../hooks/use-timeline";
 import { useTyping } from "../../hooks/use-typing";
 import { useMediaUpload } from "../../hooks/use-media-upload";
-import {
-  MAX_ATTACHMENTS,
-  nameClipboardFile,
-  stageFiles,
-  StagedAttachments,
-  type StagedAttachment,
-} from "./staged-attachments";
-
-const TEXTAREA_CLS =
-  "field-sizing-content min-h-9 flex-1 bg-transparent px-2.5 py-2 text-base outline-none placeholder:text-muted-foreground resize-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
-
-const INPUT_WRAPPER_CLS =
-  "flex items-center rounded-lg border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30 pr-1.5";
-
-interface Member {
-  userId: string;
-  name: string;
-}
-
-type AcMode = "mention" | "slash";
-
-interface AutocompleteState {
-  mode: AcMode;
-  start: number;
-  query: string;
-}
 
 function truncate(s: string, max: number): string {
   const trimmed = s.replace(/\s+/g, " ").trim();
@@ -51,18 +20,17 @@ export interface ComposerProps {
   onExitThread?: () => void;
 }
 
+type SendEvent = (
+  roomId: string,
+  threadId: string | null,
+  type: string,
+  content: Record<string, unknown>,
+) => Promise<{ event_id: string }>;
+
 export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerProps) {
   const client = useMatrixClient();
-  const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [ac, setAc] = useState<AutocompleteState | null>(null);
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const dragDepth = useRef(0);
-  const attachInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { upload, progress } = useMediaUpload();
 
   const threadScoped = Boolean(threadRootEventId);
@@ -85,209 +53,84 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     return (rootEvt?.getContent() as { body?: string } | undefined)?.body ?? "";
   }, [lastThreadEvent, threadRootEventId, client, roomId]);
 
-  const rawMembers = useMembers(roomId);
-  const members = useMemo<Member[]>(
-    () => rawMembers.map((m) => ({ userId: m.userId, name: nameOfMember(m) })),
-    [rawMembers],
-  );
-
-  const advertised = useAvailableCommands(roomId);
-  const slashCommands = useMemo(() => {
-    const client = listSlashCommands({ threadScoped });
-    const clientNames = new Set(client.map((c) => c.name));
-    const agent = advertised
-      .filter((c) => !clientNames.has(c.name))
-      .map((c) => ({ name: c.name, description: c.description, source: "agent" as const }));
-    return [...client, ...agent];
-  }, [threadScoped, advertised]);
-
-  const mentionMatches = useMemo(() => {
-    if (!ac || ac.mode !== "mention") return [];
-    const q = ac.query.toLowerCase();
-    return members
-      .filter(
-        (m) =>
-          m.userId.toLowerCase().includes(q) ||
-          m.name.toLowerCase().includes(q),
-      )
-      .slice(0, 8);
-  }, [ac, members]);
-
-  const slashMatches = useMemo<SlashCommandMeta[]>(() => {
-    if (!ac || ac.mode !== "slash") return [];
-    const q = ac.query.toLowerCase();
-    if (!q) return slashCommands;
-    return slashCommands.filter(
-      (c) => c.name.startsWith(q) || c.description.toLowerCase().includes(q),
-    );
-  }, [ac, slashCommands]);
-
-  const matches = ac?.mode === "slash" ? slashMatches : mentionMatches;
-
-  function detectAutocomplete(text: string, cursor: number) {
-    // Slash command: only triggered at position 0
-    if (text.startsWith("/") && cursor > 0 && !text.includes(" ")) {
-      const query = text.slice(1, cursor);
-      setAc((prev) => {
-        if (prev?.mode === "slash" && prev.query === query) return prev;
-        if (prev?.mode !== "slash" || prev.query !== query) setActiveIdx(0);
-        return { mode: "slash", start: 0, query };
-      });
-      return;
-    }
-
-    // Mention: walk back from cursor for unclosed `@<query>` token
-    let i = cursor - 1;
-    while (i >= 0) {
-      const ch = text[i];
-      if (ch === "@") {
-        if (i === 0 || /\s/.test(text[i - 1])) {
-          const query = text.slice(i + 1, cursor);
-          if (!/\s/.test(query) && !query.includes(":")) {
-            setAc((prev) => {
-              if (prev?.mode === "mention" && prev.start === i && prev.query === query) return prev;
-              setActiveIdx(0);
-              return { mode: "mention", start: i, query };
-            });
-            return;
-          }
-        }
-        break;
-      }
-      if (/\s/.test(ch)) break;
-      i--;
-    }
-    setAc(null);
-  }
-
-  function selectMember(member: Member) {
-    if (!ac) return;
-    const before = value.slice(0, ac.start);
-    const after = value.slice(ac.start + 1 + ac.query.length);
-    // Insert the localpart, not the displayname — the body must stay
-    // mxid-tokenizable so expandMentions() can resolve it. The dropdown
-    // shows the displayname so users see what they're picking.
-    const insert = `@${displayNameOf(member.userId)} `;
-    const next = before + insert + after;
-    setValue(next);
-    setAc(null);
-    requestAnimationFrame(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      const pos = before.length + insert.length;
-      ta.focus();
-      ta.setSelectionRange(pos, pos);
-    });
-  }
-
-  function selectSlash(cmd: SlashCommandMeta) {
-    const next = `/${cmd.name} `;
-    setValue(next);
-    setAc(null);
-    requestAnimationFrame(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.focus();
-      ta.setSelectionRange(next.length, next.length);
-    });
-  }
-
-  type SendEvent = (
-    roomId: string,
-    threadId: string | null,
-    type: string,
-    content: Record<string, unknown>,
-  ) => Promise<{ event_id: string }>;
-
-  async function send(): Promise<void> {
-    const body = value.trim();
-    if (!body && attachments.length === 0 && !quoteDraft) return;
-    setError(null);
-    try {
-      // Slash commands only apply when there's no attachment and the body starts with /
-      if (body && attachments.length === 0 && !quoteDraft) {
-        const slash = parseSlashCommand(body, { threadScoped });
-        if (slash) {
-          // matrix-js-sdk auto-adds m.relates_to for m.room.message threaded
-          // sends, but not for custom event types (dev.zooid.*). Set the
-          // relation explicitly so the daemon can route by thread root.
-          const slashContent = threadId
-            ? {
-                ...slash.content,
-                "m.relates_to": { rel_type: "m.thread", event_id: threadId },
-              }
-            : slash.content;
-          await (client.sendEvent as unknown as SendEvent).call(
-            client,
-            roomId,
-            threadId,
-            slash.eventType,
-            slashContent,
-          );
-          setValue("");
-          return;
-        }
-      }
-
-      // Send attachments first (before text), as per ZOD057 design. Uploads run
-      // one at a time so the timeline order matches the tray order; anything
-      // still unsent when one fails stays staged for a retry.
-      if (attachments.length > 0) {
-        const pending = [...attachments];
-        try {
-          while (pending.length > 0) {
-            const { id, file } = pending[0];
-            setUploadingId(id);
-            const { contentUri } = await upload(file);
-            const isImage = file.type.startsWith("image/");
-            const mediaContent: Record<string, unknown> = {
-              msgtype: isImage ? "m.image" : "m.file",
-              body: file.name,
-              url: contentUri,
-              info: { mimetype: file.type, size: file.size },
-            };
-            if (!isImage) mediaContent.filename = file.name;
-            await (client.sendEvent as unknown as SendEvent).call(
-              client,
-              roomId,
-              threadId,
-              "m.room.message",
-              mediaContent,
-            );
-            pending.shift();
-          }
-        } finally {
-          setUploadingId(null);
-          setAttachments(pending);
-          if (pending.length === 0 && attachInputRef.current) attachInputRef.current.value = "";
-        }
-      }
-
-      if (body || quoteDraft) {
-        const { body: expandedBody, userIds: mentionUserIds } = expandMentions(body, members);
-        const content: Record<string, unknown> = quoteDraft
-          ? buildQuoteContent({
-              comment: expandedBody,
-              quote: quoteDraft.quote,
-              senderName: quoteDraft.senderName,
-              origin: window.location.origin,
-            })
-          : { msgtype: "m.text", body: expandedBody };
-        if (mentionUserIds.length > 0) {
-          content["m.mentions"] = { user_ids: mentionUserIds };
-        }
+  async function send({ body, rawBody, mentionUserIds, attachments, setAttachments }: MessageInputSubmit): Promise<void> {
+    // Slash commands only apply when there's no attachment and the body starts with /
+    if (rawBody && attachments.length === 0 && !quoteDraft) {
+      const slash = parseSlashCommand(rawBody, { threadScoped });
+      if (slash) {
+        // matrix-js-sdk auto-adds m.relates_to for m.room.message threaded
+        // sends, but not for custom event types (dev.zooid.*). Set the
+        // relation explicitly so the daemon can route by thread root.
+        const slashContent = threadId
+          ? {
+              ...slash.content,
+              "m.relates_to": { rel_type: "m.thread", event_id: threadId },
+            }
+          : slash.content;
         await (client.sendEvent as unknown as SendEvent).call(
           client,
           roomId,
           threadId,
-          "m.room.message",
-          content,
+          slash.eventType,
+          slashContent,
         );
-        setValue("");
-        if (quoteDraft) setQuoteDraft(roomId, threadId, null);
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+    }
+
+    // Send attachments first (before text), as per ZOD057 design. Uploads run
+    // one at a time so the timeline order matches the tray order; anything
+    // still unsent when one fails stays staged for a retry.
+    if (attachments.length > 0) {
+      const pending = [...attachments];
+      try {
+        while (pending.length > 0) {
+          const { id, file } = pending[0];
+          setUploadingId(id);
+          const { contentUri } = await upload(file);
+          const isImage = file.type.startsWith("image/");
+          const mediaContent: Record<string, unknown> = {
+            msgtype: isImage ? "m.image" : "m.file",
+            body: file.name,
+            url: contentUri,
+            info: { mimetype: file.type, size: file.size },
+          };
+          if (!isImage) mediaContent.filename = file.name;
+          await (client.sendEvent as unknown as SendEvent).call(
+            client,
+            roomId,
+            threadId,
+            "m.room.message",
+            mediaContent,
+          );
+          pending.shift();
+        }
+      } finally {
+        setUploadingId(null);
+        setAttachments(pending);
+      }
+    }
+
+    if (body || quoteDraft) {
+      const content: Record<string, unknown> = quoteDraft
+        ? buildQuoteContent({
+            comment: body,
+            quote: quoteDraft.quote,
+            senderName: quoteDraft.senderName,
+            origin: window.location.origin,
+          })
+        : { msgtype: "m.text", body };
+      if (mentionUserIds.length > 0) {
+        content["m.mentions"] = { user_ids: mentionUserIds };
+      }
+      await (client.sendEvent as unknown as SendEvent).call(
+        client,
+        roomId,
+        threadId,
+        "m.room.message",
+        content,
+      );
+      if (quoteDraft) setQuoteDraft(roomId, threadId, null);
     }
   }
 
@@ -309,133 +152,8 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     }
   }
 
-  /** Single entry point for every way a file can reach the tray. */
-  function addFiles(files: File[]) {
-    if (files.length === 0) return;
-    setAttachments((current) => {
-      const { staged, error: stageError } = stageFiles(current, files);
-      setError(stageError);
-      return staged;
-    });
-  }
-
-  function removeAttachment(id: string) {
-    setAttachments((current) => current.filter((a) => a.id !== id));
-    if (attachInputRef.current) attachInputRef.current.value = "";
-  }
-
-  function handleAttachChange(e: React.ChangeEvent<HTMLInputElement>) {
-    addFiles(Array.from(e.target.files ?? []));
-    e.target.value = "";
-  }
-
-  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData?.files ?? []);
-    // No files on the clipboard: an ordinary text paste, leave it to the browser.
-    if (files.length === 0) return;
-    e.preventDefault();
-    addFiles(files.map((f) => nameClipboardFile(f)));
-  }
-
-  /**
-   * Dragged text or a link also fires these events; only a drag carrying files
-   * should light up the drop target or be swallowed by preventDefault().
-   */
-  function isFileDrag(e: DragEvent): boolean {
-    return Array.from(e.dataTransfer?.types ?? []).includes("Files");
-  }
-
-  function handleDragEnter(e: DragEvent) {
-    if (!isFileDrag(e)) return;
-    e.preventDefault();
-    dragDepth.current += 1;
-    setDragging(true);
-  }
-
-  function handleDragOver(e: DragEvent) {
-    if (!isFileDrag(e)) return;
-    // Without this the browser navigates to the dropped file.
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-  }
-
-  function handleDragLeave(e: DragEvent) {
-    if (!isFileDrag(e)) return;
-    // Moving between child elements fires leave/enter pairs; count depth so the
-    // highlight only clears when the pointer leaves the composer itself.
-    dragDepth.current -= 1;
-    if (dragDepth.current <= 0) {
-      dragDepth.current = 0;
-      setDragging(false);
-    }
-  }
-
-  function handleDrop(e: DragEvent) {
-    if (!isFileDrag(e)) return;
-    e.preventDefault();
-    dragDepth.current = 0;
-    setDragging(false);
-    addFiles(Array.from(e.dataTransfer?.files ?? []));
-  }
-
-  const onKeyDown = async (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (ac && matches.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIdx((i) => (i + 1) % matches.length);
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIdx((i) => (i - 1 + matches.length) % matches.length);
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        if (ac.mode === "slash") {
-          const activeCmd = slashMatches[activeIdx] as SlashCommandMeta | undefined;
-          // If the user typed the full command and pressed Enter, send immediately.
-          if (activeCmd && e.key === "Enter" && value.trim() === `/${activeCmd.name}`) {
-            setAc(null);
-            await send();
-          } else {
-            selectSlash(activeCmd as SlashCommandMeta);
-          }
-        } else {
-          selectMember(mentionMatches[activeIdx] as Member);
-        }
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setAc(null);
-        return;
-      }
-    }
-    if (e.key !== "Enter" || e.shiftKey) return;
-    e.preventDefault();
-    await send();
-  };
-
-  return (
-    <div
-      className="relative shrink-0 p-3"
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {dragging && (
-        <div className="pointer-events-none absolute inset-1 z-10 flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-ring bg-background/90 text-sm text-muted-foreground">
-          <ImageUp className="h-5 w-5" />
-          <span>Drop to attach — up to {MAX_ATTACHMENTS} files, 0.5 MB each</span>
-        </div>
-      )}
-      {error && (
-        <div role="alert" className="mb-2 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+  const header = (
+    <>
       {threadRootEventId && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 min-w-0">
           {replyingToBody ? (
@@ -473,107 +191,22 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
       {quoteDraft && (
         <QuoteChip draft={quoteDraft} onRemove={() => setQuoteDraft(roomId, threadId, null)} />
       )}
-      {ac && matches.length > 0 && (
-        <div className="absolute bottom-full left-3 right-3 mb-1">
-          {ac.mode === "slash" ? (
-            <SlashCommandList
-              commands={slashMatches}
-              activeIdx={activeIdx}
-              onSelect={selectSlash}
-              onHover={setActiveIdx}
-            />
-          ) : (
-            <ul
-              role="listbox"
-              aria-label="Mention suggestions"
-              className="max-h-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg"
-            >
-              {mentionMatches.map((m, i) => (
-                <li
-                  key={m.userId}
-                  role="option"
-                  aria-selected={i === activeIdx}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    selectMember(m);
-                  }}
-                  onMouseEnter={() => setActiveIdx(i)}
-                  className={
-                    "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm " +
-                    (i === activeIdx ? "bg-accent text-accent-foreground" : "")
-                  }
-                >
-                  <span className="font-semibold" style={{ color: senderColor(m.userId) }}>
-                    {m.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{m.userId}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <StagedAttachments
-        attachments={attachments}
-        uploadingId={uploadingId}
-        progress={progress}
-        onRemove={removeAttachment}
-      />
-      <div className={INPUT_WRAPPER_CLS}>
-        <input
-          ref={attachInputRef}
-          type="file"
-          multiple
-          aria-label="Attach file"
-          className="sr-only"
-          onChange={handleAttachChange}
-          tabIndex={-1}
-        />
-        <button
-          type="button"
-          aria-label="Attach file"
-          onClick={() => attachInputRef.current?.click()}
-          className="ml-1 shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
-        <textarea
-          ref={textareaRef}
-          data-slot="textarea"
-          aria-label="Message"
-          placeholder="Send a message…"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            detectAutocomplete(e.target.value, e.target.selectionStart);
-          }}
-          onKeyUp={(e) => {
-            if (ac && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
-            if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") {
-              const ta = e.currentTarget;
-              detectAutocomplete(ta.value, ta.selectionStart);
-            }
-          }}
-          onClick={(e) => {
-            const ta = e.currentTarget;
-            detectAutocomplete(ta.value, ta.selectionStart);
-          }}
-          onBlur={() => setAc(null)}
-          onKeyDown={onKeyDown}
-          onPaste={handlePaste}
-          rows={1}
-          className={cn(TEXTAREA_CLS)}
-        />
-        <button
-          type="button"
-          onClick={() => void send()}
-          disabled={!value.trim() && attachments.length === 0 && !quoteDraft}
-          aria-label="Send message"
-          className="shrink-0 self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
-        >
-          <SendHorizontal className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
+    </>
+  );
+
+  return (
+    <MessageInput
+      roomId={roomId}
+      className="shrink-0 p-3"
+      suggestionsClassName="left-3 right-3"
+      threadScoped={threadScoped}
+      allowEmpty={Boolean(quoteDraft)}
+      uploadingId={uploadingId}
+      uploadProgress={progress}
+      error={error}
+      onError={setError}
+      header={header}
+      onSubmit={send}
+    />
   );
 }

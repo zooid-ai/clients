@@ -48,6 +48,10 @@ export const WithAdvertisedCommands: Story = {
   args: { roomId: ROOM_ID, threadRootEventId: THREAD_ROOT },
   render: (args) => {
     seedCommandRoom();
-    return <Composer {...args} />;
+    return (
+      <div className="flex min-h-80 flex-col justify-end">
+        <Composer {...args} />
+      </div>
+    );
   },
 };
