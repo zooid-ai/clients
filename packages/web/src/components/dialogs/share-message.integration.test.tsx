@@ -186,6 +186,23 @@ describe("<ShareMessageDialog />", () => {
     expect(comment).toHaveValue("one\ntwo");
   });
 
+  it("sends once on a double Enter and keeps the comment until the send resolves", async () => {
+    const { send } = setup();
+    let resolve!: (v: { event_id: string }) => void;
+    send.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    renderDialog();
+    const user = userEvent.setup();
+    await pickBackend(user);
+    const comment = screen.getByRole("textbox", { name: /comment/i });
+    await user.type(comment, "fyi");
+    await user.keyboard("{Enter}{Enter}");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(comment).toHaveValue("fyi");
+    resolve({ event_id: "$s" });
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the error, keeps the comment and stays open when sending fails", async () => {
     const { send } = setup();
     send.mockRejectedValueOnce(new Error("forbidden"));

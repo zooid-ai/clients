@@ -56,7 +56,7 @@ export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMe
   }
 
   async function send({ body, mentionUserIds }: MessageInputSubmit) {
-    if (!client || !draft || !targetId || sending) return;
+    if (!client || !draft || !targetId) return;
     setSending(true);
     try {
       const content = buildQuoteContent({
@@ -103,7 +103,7 @@ export function ShareMessageDialog({ open, onOpenChange, title, draft }: ShareMe
         <MessageInput
           ref={inputRef}
           roomId={targetId ?? ""}
-          disabled={!targetId}
+          disabled={!targetId || sending}
           placeholder={targetId ? "Add a comment (optional)" : "Pick a room first"}
           ariaLabel="Comment"
           slashCommands={false}
