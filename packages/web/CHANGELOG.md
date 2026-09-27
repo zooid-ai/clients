@@ -1,5 +1,14 @@
 # @zooid/zoon-web
 
+## 0.13.0
+
+### Minor Changes
+
+- Share and quote threads: every thread has a link you can copy and open directly, you can quote a message into your reply, and a share dialog posts a thread into another room — with a room picker and @mentions in the note. The client also opens on the workforce space the daemon advertises in its runtime config, so a fresh `zooid dev` lands you in the right place, and the Storybook build no longer breaks on the events polyfill.
+- 6a0fc2d: Read the initial workforce space from `workforce_space` in runtime `config.json` (default `dev`). The build-time `VITE_WORKFORCE_SPACE` setting is removed, so one bundle can serve several vhosts.
+- 35dd51e: Share dialog: pick the room from a search field with autocomplete, and write the comment in the composer's input so `@mentions` of the target room's members work. The composer's input core is now a shared `MessageInput`.
+- 263b49b: Copy link, quote and share messages and threads. Thread links open in the app and highlight the linked reply, a quoted message travels with a `dev.zooid.quote` reference and a readable body fallback, and Edit and Delete move into a new ⋯ menu on the message hover bar.
+
 ## 0.12.1
 
 ### Patch Changes
