@@ -3,6 +3,7 @@ import { useUserName } from "../../hooks/use-user-name";
 
 interface Props {
   typingUserIds: string[];
+  awaitingUserIds?: string[];
   roomId?: string;
 }
 
@@ -12,8 +13,9 @@ function TypingName({ userId, roomId }: { userId: string; roomId?: string }) {
   );
 }
 
-export function TypingIndicator({ typingUserIds, roomId }: Props) {
-  if (typingUserIds.length === 0) return <div className="h-5" aria-hidden />;
+export function TypingIndicator({ typingUserIds: allTyping, awaitingUserIds = [], roomId }: Props) {
+  const typingUserIds = allTyping.filter((id) => !awaitingUserIds.includes(id));
+  if (typingUserIds.length === 0 && awaitingUserIds.length === 0) return <div className="h-5" aria-hidden />;
 
   const MAX_NAMES = 2;
   const named = typingUserIds.slice(0, MAX_NAMES);
@@ -36,8 +38,12 @@ export function TypingIndicator({ typingUserIds, roomId }: Props) {
 
   return (
     <div className="h-5 px-3 text-xs text-muted-foreground leading-5">
-      {parts}
-      {suffix}
+      {awaitingUserIds.length > 0 && <span className="text-amber-600 dark:text-amber-400">
+        {awaitingUserIds.map((id, index) => <span key={id}>{index > 0 ? ", " : ""}<TypingName userId={id} roomId={roomId} /></span>)}
+        {awaitingUserIds.length === 1 ? " is awaiting your input" : " are awaiting your input"}
+      </span>}
+      {awaitingUserIds.length > 0 && typingUserIds.length > 0 && " · "}
+      {typingUserIds.length > 0 && <span>{parts}{suffix}</span>}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   RoomEvent,
 } from "matrix-js-sdk";
 import { useSyncExternalStore } from "react";
+import { ElicitationEventType, openElicitationSenders } from "../events/elicitation";
 import { MatrixClientPeg } from "../client/peg";
 import { extractToolCallContent, type DiffBlock } from "../events/zooid-events";
 
@@ -553,4 +554,57 @@ export function useToolCallApproval(roomId: string, toolCallId: string): ToolCal
     () => snapshotToolCallApproval(roomId, toolCallId),
     () => TOOL_CALL_APPROVAL_EMPTY,
   );
+}
+
+
+const NO_EVENTS: MatrixEvent[] = [];
+const NO_USERS: string[] = [];
+const trailCache = new Map<string, { room: Room; key: string; value: MatrixEvent[] }>();
+const awaitingCache = new Map<string, { key: string; value: string[] }>();
+
+function snapshotElicitationTrail(roomId: string, requestId: string): MatrixEvent[] {
+  const room = MatrixClientPeg.safeGet()?.getRoom(roomId);
+  if (!room || !requestId) return NO_EVENTS;
+  const hits = allRoomEvents(room).filter(
+    (ev) =>
+      (ev.getType() === ElicitationEventType.Resolved || ev.getType() === ElicitationEventType.Rejected) &&
+      (ev.getContent() as { request_id?: unknown }).request_id === requestId,
+  );
+  const key = `${hits.length}:${hits.map((e) => e.getId()).join(",")}`;
+  const cacheKey = `${roomId}|${requestId}`;
+  const prev = trailCache.get(cacheKey);
+  if (prev && prev.room === room && prev.key === key) return prev.value;
+  const value = hits.length > 0 ? hits : NO_EVENTS;
+  trailCache.set(cacheKey, { room, key, value });
+  return value;
+}
+
+/** Resolved/rejected events for one question, thread-related ones included. */
+export function useElicitationTrail(roomId: string, requestId: string): MatrixEvent[] {
+  return useSyncExternalStore(
+    makeSubscribe(roomId),
+    () => snapshotElicitationTrail(roomId, requestId),
+    () => NO_EVENTS,
+  );
+}
+
+function snapshotAwaiting(roomId: string): string[] {
+  const room = MatrixClientPeg.safeGet()?.getRoom(roomId);
+  if (!room) return NO_USERS;
+  const senders = openElicitationSenders(
+    allRoomEvents(room).filter(
+      (ev) => ev.getType() === ElicitationEventType.Request || ev.getType() === ElicitationEventType.Resolved,
+    ),
+  );
+  const key = senders.join(",");
+  const prev = awaitingCache.get(roomId);
+  if (prev && prev.key === key) return prev.value;
+  const value = senders.length > 0 ? senders : NO_USERS;
+  awaitingCache.set(roomId, { key, value });
+  return value;
+}
+
+/** Agents in this room waiting on a human answer. */
+export function useAwaitingInput(roomId: string): string[] {
+  return useSyncExternalStore(makeSubscribe(roomId), () => snapshotAwaiting(roomId), () => NO_USERS);
 }

@@ -170,6 +170,7 @@ export const AGENT_RULES = [
     actions: [PushRuleActionName.Notify, { set_tweak: TweakName.Sound, value: "default" }],
   },
   { id: "dev.zooid.error", actions: [PushRuleActionName.Notify] },
+  { id: "dev.zooid.elicitation_request", actions: [PushRuleActionName.Notify, { set_tweak: TweakName.Highlight, value: true }] },
 ] as const;
 
 export const AGENT_RULE_IDS = AGENT_RULES.map((r) => r.id);

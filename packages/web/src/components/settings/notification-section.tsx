@@ -14,6 +14,7 @@ import { setSoundEnabledLocally, soundEnabledLocally } from "@/lib/notification-
 import type { GlobalNotifMode } from "@/lib/matrix/notification-prefs";
 
 const AGENT_RULE_LABELS: Record<string, string> = {
+  "dev.zooid.elicitation_request": "Questions from agents",
   "dev.zooid.approval_request": "Approval requests",
   "dev.zooid.turn.end": "Agent finished a turn",
   "dev.zooid.error": "Agent errors",

@@ -7,6 +7,7 @@ const MAX_BODY = 140;
 // deliberately excluded — never listed here, never notified.
 const AGENT_EVENT_TYPES = new Set([
   "dev.zooid.approval_request",
+  "dev.zooid.elicitation_request",
   "dev.zooid.turn.end",
   "dev.zooid.error",
 ]);
@@ -50,6 +51,9 @@ export function evaluateNotification(
     // No prose to preview — tool_title is the closest thing to a summary.
     const title = typeof content.tool_title === "string" ? (content.tool_title as string) : "a tool call";
     body = `${agentNameFor(room, senderId)} needs approval: ${title}`;
+  } else if (type === "dev.zooid.elicitation_request") {
+    const question = typeof content.message === "string" ? content.message : "a question";
+    body = `${agentNameFor(room, senderId)} asks: ${question}`;
   } else {
     // dev.zooid.turn.end / dev.zooid.error already carry a human-readable
     // body from the daemon (toTurnEndBody / toErrorBody).
