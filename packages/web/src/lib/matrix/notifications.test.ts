@@ -78,6 +78,12 @@ describe("evaluateNotification — agent event types", () => {
     return { client, room };
   }
 
+  it("names the agent and shows its elicitation question", () => {
+    const { client, room } = setupAgent();
+    const ev = makeMatrixEvent({ eventId: "$q1", roomId, type: "dev.zooid.elicitation_request", sender: "@claude:example.org", content: { request_id: "e1", message: "Which environment?" } });
+    expect(evaluateNotification(client, room, ev)).toEqual({ roomId, eventId: "$q1", title: "general", body: "claude asks: Which environment?" });
+  });
+
   it("renders an approval request without a message preview", () => {
     const { client, room } = setupAgent();
     const ev = makeMatrixEvent({

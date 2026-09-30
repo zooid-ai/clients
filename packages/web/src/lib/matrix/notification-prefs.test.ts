@@ -294,12 +294,12 @@ describe("agent push rules", () => {
     return { client: client as unknown as MatrixClient, addPushRule };
   }
 
-  it("installs all three rules as plain overrides — no before/after, which Matrix forbids against a server-default rule", async () => {
+  it("installs all four rules as plain overrides — no before/after, which Matrix forbids against a server-default rule", async () => {
     const { client, addPushRule } = clientWithPushRules();
     await ensureAgentPushRules(client);
 
     const ids = addPushRule.mock.calls.map((c) => c[2]);
-    expect(ids).toEqual(["dev.zooid.approval_request", "dev.zooid.turn.end", "dev.zooid.error"]);
+    expect(ids).toEqual(["dev.zooid.approval_request", "dev.zooid.turn.end", "dev.zooid.error", "dev.zooid.elicitation_request"]);
     for (const call of addPushRule.mock.calls) {
       expect(call[0]).toBe("global");
       expect(call[1]).toBe(PushRuleKind.Override);
@@ -330,6 +330,7 @@ describe("agent push rules", () => {
       { set_tweak: "highlight", value: true },
     ]);
     expect(actionsFor("dev.zooid.error")).toEqual(["notify"]);
+    expect(actionsFor("dev.zooid.elicitation_request")).toEqual(["notify", { set_tweak: "highlight", value: true }]);
   });
 
   it("is idempotent — re-running does not duplicate", async () => {

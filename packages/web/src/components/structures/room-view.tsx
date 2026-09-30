@@ -1,3 +1,4 @@
+import { useAwaitingInput } from "../../hooks/use-timeline";
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Composer } from "../rooms/composer";
@@ -17,6 +18,7 @@ export function RoomView() {
   const threadRootEventId = searchParams.get("thread");
   const highlightEventId = searchParams.get("event") ?? undefined;
   const known = useRoomKnown(roomId ?? "");
+  const awaitingUserIds = useAwaitingInput(roomId ?? "");
   const typingUserIds = useTyping(roomId ?? "");
   useMarkRead(roomId ?? "");
 
@@ -66,7 +68,7 @@ export function RoomView() {
           />
         )}
       </div>
-      <TypingIndicator typingUserIds={typingUserIds} roomId={roomId} />
+      <TypingIndicator awaitingUserIds={awaitingUserIds} typingUserIds={typingUserIds} roomId={roomId} />
       {showPlan && (
         <div className="px-3 pt-1">
           <PlanBoard

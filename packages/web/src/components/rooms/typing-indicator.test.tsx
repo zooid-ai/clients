@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { TypingIndicator } from "./typing-indicator";
 
@@ -41,5 +41,18 @@ describe("<TypingIndicator />", () => {
     expect(container.textContent).toMatch(/bob/i);
     expect(container.textContent).toMatch(/2 others/i);
     expect(container.textContent).toMatch(/typing/i);
+  });
+});
+
+describe("TypingIndicator — awaiting input", () => {
+  it("shows an agent awaiting input instead of typing", () => {
+    render(<TypingIndicator typingUserIds={["@architect.acme:h.example"]} awaitingUserIds={["@architect.acme:h.example"]} />);
+    expect(screen.getByText(/is awaiting your input/i)).toBeInTheDocument();
+    expect(screen.queryByText(/is typing/i)).not.toBeInTheDocument();
+  });
+  it("shows both typing and awaiting users", () => {
+    render(<TypingIndicator typingUserIds={["@bob:h.example"]} awaitingUserIds={["@architect.acme:h.example"]} />);
+    expect(screen.getByText(/is typing/i)).toBeInTheDocument();
+    expect(screen.getByText(/is awaiting your input/i)).toBeInTheDocument();
   });
 });
