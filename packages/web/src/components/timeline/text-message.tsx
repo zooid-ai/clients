@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { MatrixEvent } from "matrix-js-sdk";
+import { EventStatus, type MatrixEvent } from "matrix-js-sdk";
 import { MessageSquare, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { senderColor, splitMentions } from "@/lib/sender";
@@ -17,6 +17,7 @@ import { ZooidEventType } from "@/events/zooid-events";
 import { FormattedMessageBody } from "./formatted-message-body";
 import { MessageTile } from "./message-tile";
 import { MessageTimestamp } from "./message-timestamp";
+import { EventSendFailure, SendingIndicator } from "./send-state";
 import { ReactionPicker } from "./reaction-picker";
 import { ReactionsRow } from "./reactions-row";
 import { ReadReceiptsRow } from "./read-receipts-row";
@@ -169,6 +170,11 @@ export function TextMessage({
       ? c.format === "org.matrix.custom.html" && typeof displayFormattedBody === "string" && displayFormattedBody.length > 0
       : c.format === "org.matrix.custom.html" && typeof c.formatted_body === "string" && c.formatted_body.length > 0);
   const quote = readQuoteRef(c);
+  const failed = event.status === EventStatus.NOT_SENT;
+  const sending =
+    event.status === EventStatus.SENDING ||
+    event.status === EventStatus.QUEUED ||
+    event.status === EventStatus.ENCRYPTING;
   const { comment, fallback } = quote
     ? splitQuoteFallback(displayBody)
     : { comment: displayBody, fallback: "" };
@@ -291,13 +297,13 @@ export function TextMessage({
       ref={wrapperRef}
       data-selected={selected || undefined}
       onClick={() => { if (isMobile) setSelected(true); }}
-      className="hover:bg-muted/30 data-[selected]:bg-muted/30"
+      className={`hover:bg-muted/30 data-[selected]:bg-muted/30 ${failed ? "opacity-60" : ""}`}
       avatar={<AvatarWithPresence userId={sender} />}
       senderName={senderName}
       senderColor={senderColor(sender)}
       senderTitle={sender}
-      timestamp={<MessageTimestamp ts={event.getTs()} />}
-      actions={actions}
+      timestamp={failed ? undefined : sending ? <SendingIndicator /> : <MessageTimestamp ts={event.getTs()} />}
+      actions={failed || sending ? undefined : actions}
     >
         {editing ? (
           <InlineEdit
@@ -329,6 +335,10 @@ export function TextMessage({
             );
             return truncateBody ? <TruncatedBody>{body}</TruncatedBody> : body;
           })()
+        )}
+
+        {failed && (
+          <EventSendFailure event={event} />
         )}
 
         <ReactionsRow roomId={roomId} eventId={eventId} reactions={reactions} />
