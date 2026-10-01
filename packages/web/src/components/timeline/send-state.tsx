@@ -32,13 +32,15 @@ export function SendFailure({
     <div role="alert" className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-destructive">
       <TriangleAlertIcon className="size-3.5 shrink-0" />
       <span className="font-medium">Not sent</span>
-      <span className="text-muted-foreground">· {reason}</span>
-      <button type="button" onClick={onRetry} className="font-medium hover:underline">
-        Retry
-      </button>
-      <button type="button" onClick={onDelete} className="text-muted-foreground hover:underline">
-        Delete
-      </button>
+      <span className="text-foreground/80">· {reason}</span>
+      <span className="flex items-center gap-2 whitespace-nowrap">
+        <button type="button" onClick={onRetry} className="font-medium text-foreground hover:underline">
+          Retry
+        </button>
+        <button type="button" onClick={onDelete} className="text-foreground/70 hover:underline">
+          Delete
+        </button>
+      </span>
     </div>
   );
 }
