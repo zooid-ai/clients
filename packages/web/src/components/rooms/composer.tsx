@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
+import { EventStatus, type MatrixEvent, type Room } from "matrix-js-sdk";
 import { parseSlashCommand } from "@/lib/slash-commands";
 import { buildQuoteContent } from "@/lib/matrix/quote";
 import { setQuoteDraft, useQuoteDraft } from "@/lib/quote-draft-store";
 import { QuoteChip } from "./quote-chip";
 import { MessageInput, type MessageInputSubmit } from "./message-input";
 import { useMatrixClient } from "../../hooks/use-matrix-client";
-import { useThreadPreview } from "../../hooks/use-timeline";
+import { allRoomEvents, useThreadPreview } from "../../hooks/use-timeline";
 import { useTyping } from "../../hooks/use-typing";
 import { useMediaUpload } from "../../hooks/use-media-upload";
 
@@ -26,6 +27,9 @@ type SendEvent = (
   type: string,
   content: Record<string, unknown>,
 ) => Promise<{ event_id: string }>;
+
+const notSentEchoes = (room: Room | null): MatrixEvent[] =>
+  room ? allRoomEvents(room).filter((ev) => ev.status === EventStatus.NOT_SENT) : [];
 
 export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerProps) {
   const client = useMatrixClient();
@@ -53,6 +57,30 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     return (rootEvt?.getContent() as { body?: string } | undefined)?.body ?? "";
   }, [lastThreadEvent, threadRootEventId, client, roomId]);
 
+  /**
+   * Send one event. When the server rejects it, the SDK keeps a NOT_SENT local
+   * echo in the timeline. For message content that tile owns the failure (reason,
+   * Retry, Delete), so the error is swallowed here. Custom event types have no
+   * tile that shows a failure, so their echo is dropped and the error rethrown
+   * for the composer's error line.
+   */
+  async function sendEvent(
+    type: string,
+    content: Record<string, unknown>,
+    { tile }: { tile: boolean },
+  ): Promise<void> {
+    const room = client.getRoom(roomId);
+    const known = new Set(notSentEchoes(room));
+    try {
+      await (client.sendEvent as unknown as SendEvent).call(client, roomId, threadId, type, content);
+    } catch (err) {
+      const echoes = notSentEchoes(room).filter((ev) => !known.has(ev));
+      if (tile && echoes.length > 0) return;
+      for (const ev of echoes) client.cancelPendingEvent(ev);
+      throw err;
+    }
+  }
+
   async function send({ body, rawBody, mentionUserIds, attachments, setAttachments }: MessageInputSubmit): Promise<void> {
     // Slash commands only apply when there's no attachment and the body starts with /
     if (rawBody && attachments.length === 0 && !quoteDraft) {
@@ -67,13 +95,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
               "m.relates_to": { rel_type: "m.thread", event_id: threadId },
             }
           : slash.content;
-        await (client.sendEvent as unknown as SendEvent).call(
-          client,
-          roomId,
-          threadId,
-          slash.eventType,
-          slashContent,
-        );
+        await sendEvent(slash.eventType, slashContent, { tile: false });
         return;
       }
     }
@@ -96,13 +118,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
             info: { mimetype: file.type, size: file.size },
           };
           if (!isImage) mediaContent.filename = file.name;
-          await (client.sendEvent as unknown as SendEvent).call(
-            client,
-            roomId,
-            threadId,
-            "m.room.message",
-            mediaContent,
-          );
+          await sendEvent("m.room.message", mediaContent, { tile: true });
           pending.shift();
         }
       } finally {
@@ -123,13 +139,7 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
       if (mentionUserIds.length > 0) {
         content["m.mentions"] = { user_ids: mentionUserIds };
       }
-      await (client.sendEvent as unknown as SendEvent).call(
-        client,
-        roomId,
-        threadId,
-        "m.room.message",
-        content,
-      );
+      await sendEvent("m.room.message", content, { tile: true });
       if (quoteDraft) setQuoteDraft(roomId, threadId, null);
     }
   }
@@ -140,12 +150,10 @@ export function Composer({ roomId, threadRootEventId, onExitThread }: ComposerPr
     if (!slash) return;
     setError(null);
     try {
-      await (client.sendEvent as unknown as SendEvent).call(
-        client,
-        roomId,
-        threadId,
+      await sendEvent(
         slash.eventType,
         { ...slash.content, "m.relates_to": { rel_type: "m.thread", event_id: threadId } },
+        { tile: false },
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

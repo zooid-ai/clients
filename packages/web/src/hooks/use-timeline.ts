@@ -23,6 +23,12 @@ interface TimelineState {
    * not adjacent — messages are missing in between and have to be paginated in.
    */
   gapBeforeEventIds: string[];
+  /**
+   * `id:status` of every local echo. A status change (SENDING → NOT_SENT →
+   * SENDING → sent) mutates the same MatrixEvent in place, so without this the
+   * cached snapshot would look unchanged and the tile would never repaint.
+   */
+  echoKey: string;
 }
 
 export interface ThreadPreviewState {
@@ -43,7 +49,7 @@ export interface ThreadFullState {
   totalCount: number;
 }
 
-const EMPTY: TimelineState = { events: [], pendingRootIds: [], gapBeforeEventIds: [] };
+const EMPTY: TimelineState = { events: [], pendingRootIds: [], gapBeforeEventIds: [], echoKey: "" };
 const THREAD_EMPTY: ThreadPreviewState = { events: [], totalCount: 0 };
 const THREAD_FULL_EMPTY: ThreadFullState = {
   root: undefined,
@@ -220,9 +226,15 @@ function snapshot(roomId: string): TimelineState {
     }
   }
 
+  const echoKey = events
+    .filter((ev) => ev.status)
+    .map((ev) => `${ev.getId()}:${ev.status}`)
+    .join(",");
+
   const cached = snapshotCache.get(room);
   if (
     cached &&
+    cached.echoKey === echoKey &&
     cached.events.length === events.length &&
     cached.events[events.length - 1] === events[events.length - 1] &&
     cached.pendingRootIds.length === pendingRootIds.length &&
@@ -232,7 +244,7 @@ function snapshot(roomId: string): TimelineState {
   ) {
     return cached;
   }
-  const next = { events, pendingRootIds, gapBeforeEventIds };
+  const next = { events, pendingRootIds, gapBeforeEventIds, echoKey };
   snapshotCache.set(room, next);
   return next;
 }
@@ -337,12 +349,18 @@ export function makeSubscribe(roomId: string) {
     const onTimelineReset = (room?: Room) => {
       if (room?.roomId === roomId) cb();
     };
+    // Fires when a local echo's status changes or it is cancelled or
+    // resent; the event is mutated in place so no Timeline event follows.
+    const onLocalEcho = (_ev: MatrixEvent, room: Room) => {
+      if (room.roomId === roomId) cb();
+    };
     client.on(RoomEvent.Timeline, onTimeline);
     client.on(RoomEvent.TimelineReset, onTimelineReset);
     client.on(ClientEvent.Room, onRoom);
     const room = client.getRoom(roomId);
     room?.on(RoomEvent.Timeline, onTimeline);
     room?.on(RoomEvent.TimelineReset, onTimelineReset);
+    room?.on(RoomEvent.LocalEchoUpdated, onLocalEcho);
     fetchSubscribers.add(cb);
     const unsubPeg = MatrixClientPeg.subscribe(cb);
     return () => {
@@ -351,6 +369,7 @@ export function makeSubscribe(roomId: string) {
       client.off(ClientEvent.Room, onRoom);
       room?.off(RoomEvent.Timeline, onTimeline);
       room?.off(RoomEvent.TimelineReset, onTimelineReset);
+      room?.off(RoomEvent.LocalEchoUpdated, onLocalEcho);
       fetchSubscribers.delete(cb);
       unsubPeg();
     };
