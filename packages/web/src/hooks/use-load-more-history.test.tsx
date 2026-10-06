@@ -1,7 +1,13 @@
 import { act, renderHook } from "@testing-library/react";
-import { Direction } from "matrix-js-sdk";
+import { Direction, RoomEvent } from "matrix-js-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ClientEventName, makeFakeClient, makeRoom } from "../../test/factories";
+import {
+  ClientEventName,
+  makeFakeClient,
+  makeRoom,
+  mkMatrixEvent,
+  pushTimelineEvent,
+} from "../../test/factories";
 import { MatrixClientPeg } from "../client/peg";
 import { useLoadMoreHistory } from "./use-load-more-history";
 
@@ -69,5 +75,79 @@ describe("useLoadMoreHistory", () => {
       limit: 50,
     });
     expect(result.current.hasMore).toBe(false);
+  });
+
+  describe("after a gappy sync", () => {
+    function gappyRoom() {
+      const client = makeFakeClient({ userId: me });
+      const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+      const push = (eventId: string, ts: number) =>
+        pushTimelineEvent(
+          room,
+          mkMatrixEvent({
+            eventId,
+            roomId,
+            sender: "@a:h.example",
+            type: "m.room.message",
+            content: { msgtype: "m.text", body: eventId },
+            ts,
+          }),
+        );
+      push("$old1", 1000);
+      room.getLiveTimeline().setPaginationToken("older_tok", Direction.Backward);
+      room.resetLiveTimeline("hole_tok", "old_sync_tok");
+      push("$new1", 3000);
+      const [older, newer] = room.getUnfilteredTimelineSet().getTimelines();
+
+      const paginate = vi.fn().mockResolvedValue(true);
+      Object.assign(client as unknown as Record<string, unknown>, {
+        getRoom: () => room,
+        paginateEventTimeline: paginate,
+      });
+      MatrixClientPeg.injectClientForTest(client);
+      return { room, older, newer, paginate };
+    }
+
+    it("paginates the oldest timeline, not the live one", async () => {
+      const { older, newer, paginate } = gappyRoom();
+
+      const { result } = renderHook(() => useLoadMoreHistory(roomId));
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(paginate).toHaveBeenCalledWith(older, { backwards: true, limit: 50 });
+      expect(paginate).not.toHaveBeenCalledWith(newer, expect.anything());
+    });
+
+    it("keeps offering more once the hole joins, while the older timeline holds a token", () => {
+      const { room, older, newer } = gappyRoom();
+      expect(newer.getPaginationToken(Direction.Backward)).toBe("hole_tok");
+
+      const { result } = renderHook(() => useLoadMoreHistory(roomId));
+      expect(result.current.hasMore).toBe(true);
+
+      // What the SDK does when pagination across the hole reaches known events.
+      act(() => {
+        newer.setNeighbouringTimeline(older, Direction.Backward);
+        older.setNeighbouringTimeline(newer, Direction.Forward);
+        room.emit(RoomEvent.TimelineReset, room, room.getUnfilteredTimelineSet(), true);
+      });
+
+      expect(newer.getPaginationToken(Direction.Backward)).toBeNull();
+      expect(older.getPaginationToken(Direction.Backward)).toBe("older_tok");
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    it("hides the button once the oldest timeline reaches the start of the room", () => {
+      const { room, older, newer } = gappyRoom();
+      newer.setNeighbouringTimeline(older, Direction.Backward);
+      older.setNeighbouringTimeline(newer, Direction.Forward);
+      older.setPaginationToken(null, Direction.Backward);
+
+      const { result } = renderHook(() => useLoadMoreHistory(roomId));
+      expect(result.current.hasMore).toBe(false);
+      expect(room.getLiveTimeline().getPaginationToken(Direction.Backward)).toBeNull();
+    });
   });
 });
