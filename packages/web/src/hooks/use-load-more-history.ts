@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ClientEvent, Direction, type Room, RoomEvent } from "matrix-js-sdk";
 import { MatrixClientPeg } from "../client/peg";
+import { oldestTimeline } from "./use-timeline";
 
 interface State {
   loading: boolean;
@@ -13,12 +14,15 @@ function snapshotHasMore(roomId: string): boolean {
   if (!room) return false;
   // Brand-new rooms don't yet have a back-pagination token, so showing "Load
   // more" at the top of an empty conversation is misleading. Derive from the
-  // live timeline's prev_batch instead of optimistically assuming true.
-  return room.getLiveTimeline().getPaginationToken(Direction.Backward) !== null;
+  // oldest timeline's backward token instead of optimistically assuming true.
+  return oldestTimeline(room).getPaginationToken(Direction.Backward) !== null;
 }
 
 /**
- * Backward-paginates the room's live timeline by `limit` events per call.
+ * Backward-paginates the room's oldest timeline by `limit` events per call.
+ * Not the live one: after a gappy sync that is the far side of a hole, and
+ * joining it to an older timeline nulls its token, hiding "Load more" while
+ * older history remains. Holes are the TimelineGap marker's job (useFillGap).
  * matrix-js-sdk emits Room.timeline for each new event, so consumers using
  * useTimeline / useThread will pick up the additions automatically.
  */
@@ -28,7 +32,7 @@ export function useLoadMoreHistory(roomId: string, limit = 50) {
     hasMore: snapshotHasMore(roomId),
   }));
 
-  // Sync hasMore with the live timeline: when sync delivers a prev_batch we
+  // Sync hasMore with the oldest timeline: when sync delivers a prev_batch we
   // may flip from false → true; after the user paginates to the start we'll
   // flip true → false via the paginate result below.
   useEffect(() => {
@@ -87,7 +91,7 @@ export function useLoadMoreHistory(roomId: string, limit = 50) {
     if (!client || !room) return;
     setState((s) => ({ ...s, loading: true }));
     try {
-      const timeline = room.getLiveTimeline();
+      const timeline = oldestTimeline(room);
       const more = await client.paginateEventTimeline(timeline, {
         backwards: true,
         limit,

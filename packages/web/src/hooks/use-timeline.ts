@@ -128,6 +128,26 @@ export function allRoomEvents(room: Room): MatrixEvent[] {
   return out;
 }
 
+/** The room's non-empty unfiltered timelines, ordered by their first event. */
+function timelinesOldestFirst(room: Room): EventTimeline[] {
+  return room
+    .getUnfilteredTimelineSet()
+    .getTimelines()
+    .filter((tl) => tl.getEvents().length > 0)
+    .sort((a, b) => a.getEvents()[0].getTs() - b.getEvents()[0].getTs());
+}
+
+/**
+ * The timeline that owns the start of loaded history — the one "Load more"
+ * must paginate. After a gappy sync the live timeline is the far side of a
+ * hole, and joining it to an older one nulls its backward token, so it says
+ * nothing about whether older history remains. Falls back to the live timeline
+ * while the room has no events yet.
+ */
+export function oldestTimeline(room: Room): EventTimeline {
+  return timelinesOldestFirst(room)[0] ?? room.getLiveTimeline();
+}
+
 /**
  * Timelines that start after a hole in the room's history.
  *
@@ -143,11 +163,7 @@ export function allRoomEvents(room: Room): MatrixEvent[] {
  * "Load more" button at the top of the panel is for, not a hole.
  */
 function gapStartTimelines(room: Room): Set<EventTimeline> {
-  const timelines = room
-    .getUnfilteredTimelineSet()
-    .getTimelines()
-    .filter((tl) => tl.getEvents().length > 0)
-    .sort((a, b) => a.getEvents()[0].getTs() - b.getEvents()[0].getTs());
+  const timelines = timelinesOldestFirst(room);
 
   const out = new Set<EventTimeline>();
   for (let i = 1; i < timelines.length; i++) {
