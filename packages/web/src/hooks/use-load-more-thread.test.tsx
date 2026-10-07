@@ -1,7 +1,7 @@
 import { renderHook, act } from "@testing-library/react";
-import { Direction, type Room } from "matrix-js-sdk";
+import { Direction, RoomEvent, type Room } from "matrix-js-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { makeFakeClient, makeRoom } from "../../test/factories";
+import { makeFakeClient, makeRoom, mkMatrixEvent, pushTimelineEvent } from "../../test/factories";
 import { MatrixClientPeg } from "../client/peg";
 import { useLoadMoreThread } from "./use-load-more-thread";
 
@@ -33,7 +33,7 @@ describe("useLoadMoreThread", () => {
   // keeps thread replies in the main room timeline and room.getThread() never
   // returns anything. Bailing on a null Thread made the ThreadView "Load more"
   // button a permanent no-op (zooid-ai/zooid#14).
-  it("paginates the room's live timeline when the SDK has no Thread object", async () => {
+  it("paginates the room's oldest timeline when the SDK has no Thread object", async () => {
     const { room, paginate } = setup({ thread: null });
 
     const { result } = renderHook(() => useLoadMoreThread(roomId, rootId, 50));
@@ -122,6 +122,77 @@ describe("useLoadMoreThread", () => {
     });
 
     expect(paginate).not.toHaveBeenCalled();
+    expect(result.current.hasMore).toBe(false);
+  });
+});
+
+describe("useLoadMoreThread after a gappy sync", () => {
+  function gappyRoom() {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    (room as unknown as { getThread: () => null }).getThread = () => null;
+    const push = (eventId: string, ts: number) =>
+      pushTimelineEvent(
+        room,
+        mkMatrixEvent({
+          eventId,
+          roomId,
+          sender: "@a:h.example",
+          type: "m.room.message",
+          content: { msgtype: "m.text", body: eventId },
+          ts,
+        }),
+      );
+    push(rootId, 1000);
+    room.getLiveTimeline().setPaginationToken("older_tok", Direction.Backward);
+    room.resetLiveTimeline("hole_tok", "old_sync_tok");
+    push("$later", 3000);
+    const [older, newer] = room.getUnfilteredTimelineSet().getTimelines();
+
+    const paginate = vi.fn().mockResolvedValue(true);
+    Object.assign(client as unknown as Record<string, unknown>, {
+      getRoom: (id: string) => (id === roomId ? room : null),
+      paginateEventTimeline: paginate,
+    });
+    MatrixClientPeg.injectClientForTest(client);
+    return { room, older, newer, paginate };
+  }
+
+  it("paginates the oldest timeline, not the live one", async () => {
+    const { older, newer, paginate } = gappyRoom();
+
+    const { result } = renderHook(() => useLoadMoreThread(roomId, rootId, 50));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(paginate).toHaveBeenCalledWith(older, { backwards: true, limit: 50 });
+    expect(paginate).not.toHaveBeenCalledWith(newer, expect.anything());
+  });
+
+  it("keeps hasMore when the live timeline joins an older one that still holds a token", () => {
+    const { room, older, newer } = gappyRoom();
+
+    const { result } = renderHook(() => useLoadMoreThread(roomId, rootId));
+    expect(result.current.hasMore).toBe(true);
+
+    act(() => {
+      newer.setNeighbouringTimeline(older, Direction.Backward);
+      older.setNeighbouringTimeline(newer, Direction.Forward);
+      room.emit(RoomEvent.TimelineReset, room, room.getUnfilteredTimelineSet(), true);
+    });
+
+    expect(newer.getPaginationToken(Direction.Backward)).toBeNull();
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("stops offering more once the oldest timeline reaches the start of the room", () => {
+    const { older, newer } = gappyRoom();
+    newer.setNeighbouringTimeline(older, Direction.Backward);
+    older.setNeighbouringTimeline(newer, Direction.Forward);
+    older.setPaginationToken(null, Direction.Backward);
+
+    const { result } = renderHook(() => useLoadMoreThread(roomId, rootId));
     expect(result.current.hasMore).toBe(false);
   });
 });

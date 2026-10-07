@@ -47,6 +47,12 @@ export interface ThreadFullState {
   events: MatrixEvent[];
   /** Authoritative total reply count. */
   totalCount: number;
+  /**
+   * Ids of replies preceded by a hole the SDK could not join, between the
+   * root and that reply. Same discontinuity rule as the room's
+   * gapBeforeEventIds, applied to the thread's projection.
+   */
+  gapBeforeEventIds: string[];
 }
 
 const EMPTY: TimelineState = { events: [], pendingRootIds: [], gapBeforeEventIds: [], echoKey: "" };
@@ -56,6 +62,7 @@ const THREAD_FULL_EMPTY: ThreadFullState = {
   rootPending: false,
   events: [],
   totalCount: 0,
+  gapBeforeEventIds: [],
 };
 
 const snapshotCache = new WeakMap<Room, TimelineState>();
@@ -67,7 +74,7 @@ const threadCache = new Map<
 
 const threadFullCache = new Map<
   string,
-  { replyCount: number; totalCount: number; root: MatrixEvent | undefined; rootPending: boolean; state: ThreadFullState }
+  { replyCount: number; totalCount: number; root: MatrixEvent | undefined; rootPending: boolean; gapKey: string; state: ThreadFullState }
 >();
 
 // Lazy-loaded events fetched via /rooms/{roomId}/event/{eventId} when the
@@ -173,6 +180,42 @@ function gapStartTimelines(room: Room): Set<EventTimeline> {
     out.add(tl);
   }
   return out;
+}
+
+/**
+ * Where a thread's gap markers go. The room's gap-start timelines, projected
+ * onto the thread: a hole only counts if it starts after the root, and it is
+ * anchored to the first rendered reply in that timeline *or any later one*.
+ * The stretch right after the hole may hold no reply of this thread, while
+ * one further down still sits on the far side of it. Holes that resolve to
+ * the same reply show as one marker. A hole with no rendered reply after it
+ * has nothing to anchor to.
+ */
+function threadGapBeforeEventIds(
+  room: Room,
+  root: MatrixEvent | undefined,
+  replies: MatrixEvent[],
+): string[] {
+  const gaps = gapStartTimelines(room);
+  if (!root || gaps.size === 0) return [];
+  const order = timelinesOldestFirst(room);
+  const timelineSet = room.getUnfilteredTimelineSet();
+  const rank = (ev: MatrixEvent) => {
+    const id = ev.getId();
+    const tl = id ? timelineSet.getTimelineForEvent(id) : null;
+    return tl ? order.indexOf(tl) : -1;
+  };
+  const anchors = new Set<string>();
+  for (const gap of gaps) {
+    // A hole at or before the root has nothing of this thread above it.
+    if (gap.getEvents()[0].getTs() <= root.getTs()) continue;
+    const gapRank = order.indexOf(gap);
+    const id = replies.find((ev) => rank(ev) >= gapRank)?.getId();
+    if (id) anchors.add(id);
+  }
+  return replies
+    .map((ev) => ev.getId())
+    .filter((id): id is string => !!id && anchors.has(id));
 }
 
 function snapshot(roomId: string): TimelineState {
@@ -325,6 +368,9 @@ function snapshotThreadFull(roomId: string, rootEventId: string): ThreadFullStat
   });
 
   const totalCount = Math.max(serverCount, threadEvents.length);
+  const gapBeforeEventIds = threadGapBeforeEventIds(room, root, threadEvents);
+  // A join adds no reply, so the reply count alone can't tell a stale snapshot.
+  const gapKey = gapBeforeEventIds.join(",");
   const cacheKey = `${roomId}:${rootEventId}`;
   const cached = threadFullCache.get(cacheKey);
   if (
@@ -332,17 +378,25 @@ function snapshotThreadFull(roomId: string, rootEventId: string): ThreadFullStat
     cached.replyCount === threadEvents.length &&
     cached.totalCount === totalCount &&
     cached.root === root &&
-    cached.rootPending === rootPending
+    cached.rootPending === rootPending &&
+    cached.gapKey === gapKey
   ) {
     return cached.state;
   }
 
-  const state: ThreadFullState = { root, rootPending, events: threadEvents, totalCount };
+  const state: ThreadFullState = {
+    root,
+    rootPending,
+    events: threadEvents,
+    totalCount,
+    gapBeforeEventIds,
+  };
   threadFullCache.set(cacheKey, {
     replyCount: threadEvents.length,
     totalCount,
     root,
     rootPending,
+    gapKey,
     state,
   });
   return state;
