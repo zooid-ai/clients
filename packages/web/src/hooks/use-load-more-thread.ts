@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Direction, type EventTimeline, RoomEvent } from "matrix-js-sdk";
 import { MatrixClientPeg } from "../client/peg";
+import { oldestTimeline } from "./use-timeline";
 
 interface State {
   loading: boolean;
@@ -17,6 +18,12 @@ interface State {
  * timeline is where we have to paginate; bailing on a null Thread is what made
  * the ThreadView "Load more" button a permanent no-op (zooid-ai/zooid#14).
  *
+ * Which room timeline: the oldest, not the live one. After a gappy sync the
+ * live timeline is the far side of a hole. Joining it to an older one nulls
+ * its token, so "Load more" retired while older replies were still unloaded and
+ * the thread's real start became unreachable. Holes are the marker's job
+ * (useFillGap).
+ *
  * The Thread branch is kept so this keeps working if thread support is turned
  * on later.
  */
@@ -25,7 +32,7 @@ function threadTimeline(roomId: string, rootEventId: string): EventTimeline | nu
   const room = client?.getRoom(roomId);
   if (!room) return null;
   const thread = room.getThread(rootEventId);
-  return thread ? thread.liveTimeline : room.getLiveTimeline();
+  return thread ? thread.liveTimeline : oldestTimeline(room);
 }
 
 function snapshotHasMore(roomId: string, rootEventId: string): boolean {

@@ -164,3 +164,61 @@ test("a gap in the middle of the conversation is marked and fillable in place", 
   // Hole closed, so the marker retires.
   await expect(page.getByTestId("timeline-gap")).toHaveCount(0);
 });
+
+test("a hole in the middle of a thread is marked and fillable in place", async ({
+  page,
+  human,
+  daemon,
+}) => {
+  const roomId = await daemon.createRoomWithHuman(human.userId);
+  await joinAsHuman(roomId, human);
+
+  const rootId = await daemon.sendText(roomId, "thread-gap root");
+  // Five loaded replies keeps ThreadView's prefetch-on-open loop out of the way.
+  for (let i = 1; i <= 5; i++) {
+    await daemon.sendThreadReply(roomId, rootId, `thread-before-${i}`);
+  }
+
+  await loginAndOpenRoom(page, human, roomId);
+  await expect(page.getByText("thread-gap root", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Replies sent while offline, then enough filler that the reconnect sync
+  // comes back `limited: true` with the replies inside the hole.
+  await page.context().setOffline(true);
+  for (let i = 1; i <= 3; i++) {
+    await daemon.sendThreadReply(roomId, rootId, `thread-missed-${i}`);
+  }
+  for (let i = 1; i <= 40; i++) {
+    await daemon.sendText(roomId, `thread-filler-${i}`);
+  }
+  await page.context().setOffline(false);
+  await expect(page.getByText("thread-filler-40", { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+
+  // A reply after reconnect, so there is a rendered reply below the hole.
+  await daemon.sendThreadReply(roomId, rootId, "thread-after");
+
+  await page.getByRole("button", { name: /view thread \(\d+ events\)/i }).click();
+  await expect(page.getByText("thread-after", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("thread-missed-1", { exact: true })).toHaveCount(0);
+
+  const gap = page.getByTestId("timeline-gap");
+  await expect(gap).toHaveCount(1);
+  const gapY = (await gap.boundingBox())!.y;
+  const beforeY = (await page.getByText("thread-before-5", { exact: true }).boundingBox())!.y;
+  const afterY = (await page.getByText("thread-after", { exact: true }).boundingBox())!.y;
+  expect(beforeY).toBeLessThan(gapY);
+  expect(gapY).toBeLessThan(afterY);
+
+  await page.getByRole("button", { name: /load missing messages/i }).click();
+  await expect(page.getByText("thread-missed-1", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("thread-missed-3", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("timeline-gap")).toHaveCount(0);
+
+  // Every reply is accounted for, so "Load more" doesn't offer itself at the
+  // top; the marker didn't leave a dead control behind.
+  await expect(page.getByRole("button", { name: /^load more$/i })).toHaveCount(0);
+});

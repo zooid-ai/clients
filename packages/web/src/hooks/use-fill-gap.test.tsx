@@ -137,3 +137,48 @@ describe("useFillGap", () => {
     expect(paginate).toHaveBeenCalledWith(older, { backwards: true, limit: 50 });
   });
 });
+
+describe("useFillGap across joined timelines", () => {
+  // In a thread the anchor can sit one or more joined timelines below the
+  // hole. Its own timeline's backward token was nulled by the join, and
+  // paginateEventTimeline reads a null token as "from the latest event", which
+  // walks away from the hole.
+  it("paginates the head of the anchor's timeline chain, not the anchor's own timeline", async () => {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    const push = (eventId: string) =>
+      pushTimelineEvent(
+        room,
+        mkMatrixEvent({
+          eventId,
+          roomId,
+          sender: "@a:h.example",
+          type: "m.room.message",
+          content: { msgtype: "m.text", body: eventId },
+        }),
+      );
+    push("$a1");
+    room.resetLiveTimeline("hole_tok", "old_sync_tok");
+    push("$b1");
+    room.resetLiveTimeline("joined_tok", "mid_sync_tok");
+    push("$c1");
+    const [, middle, newest] = room.getUnfilteredTimelineSet().getTimelines();
+    newest.setNeighbouringTimeline(middle, Direction.Backward);
+    middle.setNeighbouringTimeline(newest, Direction.Forward);
+
+    const paginate = vi.fn().mockResolvedValue(true);
+    Object.assign(client as unknown as Record<string, unknown>, {
+      getRoom: () => room,
+      paginateEventTimeline: paginate,
+    });
+    MatrixClientPeg.injectClientForTest(client);
+
+    const { result } = renderHook(() => useFillGap(roomId));
+    await act(async () => {
+      await result.current.fillGap("$c1");
+    });
+
+    expect(paginate).toHaveBeenCalledWith(middle, { backwards: true, limit: 50 });
+    expect(paginate).not.toHaveBeenCalledWith(newest, expect.anything());
+  });
+});
