@@ -1,5 +1,11 @@
 # @zooid/zoon-web
 
+## 0.15.0
+
+### Minor Changes
+
+- Show gaps in thread history with controls to load the missing messages. Load older room and thread messages from the oldest timeline so pagination continues correctly across gaps. Apply the Storybook dark theme to portaled menus and dialogs.
+
 ## 0.14.0
 
 ### Minor Changes
