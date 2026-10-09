@@ -63,3 +63,67 @@ export const WithHistoryGap: Story = {
     );
   },
 };
+
+/**
+ * The agent-room shape of the same hole: everything that arrived after it is a
+ * thread reply, which the room view hides, and the thread's root was posted
+ * inside the hole, so the client fetches it on its own and it sits in no
+ * timeline. The marker still has to land between the two threads.
+ */
+function seedGappyThreadedRoom() {
+  const client = makeFakeClient({ userId: ME });
+  const room = makeRoom(ROOM_ID, { client, myUserId: ME, timelineSupport: true });
+  (client as unknown as { getRoom: (id: string) => unknown }).getRoom = (id: string) =>
+    id === ROOM_ID ? room : null;
+
+  const now = Date.now();
+  const hour = 60 * 60 * 1000;
+  const NEW_ROOT = "$standup-root";
+  (client as unknown as Record<string, unknown>).fetchRoomEvent = async () => ({
+    event_id: NEW_ROOT,
+    room_id: ROOM_ID,
+    sender: ME,
+    type: "m.room.message",
+    content: { msgtype: "m.text", body: "Morning standup: what needs me today?" },
+    origin_server_ts: now - 3 * hour,
+  });
+
+  const say = (eventId: string, sender: string, body: string, ts: number, root?: string) =>
+    pushTimelineEvent(
+      room,
+      mkMatrixEvent({
+        eventId,
+        roomId: ROOM_ID,
+        sender,
+        type: "m.room.message",
+        content: {
+          msgtype: "m.text",
+          body,
+          ...(root && { "m.relates_to": { rel_type: "m.thread", event_id: root } }),
+        },
+        ts,
+      }),
+    );
+
+  say("$old-root", ME, "Can you take a look at the auth module?", now - 14 * hour);
+  say("$old-r1", AGENT, "Starting now.", now - 14 * hour + 60_000, "$old-root");
+
+  room.resetLiveTimeline("prev_batch_tok", "old_sync_tok");
+
+  say("$new-r1", AGENT, "Two PRs are waiting on your review.", now - 2 * hour, NEW_ROOT);
+  say("$new-r2", AGENT, "And one spec needs a decision.", now - 2 * hour + 60_000, NEW_ROOT);
+
+  MatrixClientPeg.injectClientForTest(client);
+}
+
+export const WithHistoryGapBeforeFetchedThread: Story = {
+  args: { roomId: ROOM_ID },
+  render: () => {
+    seedGappyThreadedRoom();
+    return (
+      <div style={{ height: "100vh" }}>
+        <TimelinePanel roomId={ROOM_ID} />
+      </div>
+    );
+  },
+};

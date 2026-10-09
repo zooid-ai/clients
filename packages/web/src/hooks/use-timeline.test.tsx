@@ -1,6 +1,6 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { Direction, RoomEvent, type Room } from "matrix-js-sdk";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   makeFakeClient,
   makeRoom,
@@ -367,6 +367,105 @@ describe("useTimeline gap detection", () => {
     const { result } = renderHook(() => useTimeline(roomId));
     return { result, room };
   }
+});
+
+// In an agent room nearly everything after a hole is a thread reply, which the
+// room view filters out, and the thread roots it does render are often fetched
+// on their own and belong to no timeline. The marker has to land on whatever
+// rendered event comes after the hole, wherever that event lives.
+describe("useTimeline gap anchors in a threaded room", () => {
+  function setup() {
+    const client = makeFakeClient({ userId: me });
+    const room = makeRoom(roomId, { client, myUserId: me, timelineSupport: true });
+    (client as unknown as Record<string, unknown>).getRoom = () => room;
+    MatrixClientPeg.injectClientForTest(client);
+
+    const msg = (eventId: string, ts: number) =>
+      pushTimelineEvent(
+        room,
+        mkMatrixEvent({
+          eventId,
+          roomId,
+          sender: "@a:h.example",
+          type: "m.room.message",
+          content: { msgtype: "m.text", body: eventId },
+          ts,
+        }),
+      );
+    const reply = (eventId: string, rootId: string, ts: number) =>
+      pushTimelineEvent(
+        room,
+        mkMatrixEvent({
+          eventId,
+          roomId,
+          sender: "@a:h.example",
+          type: "m.room.message",
+          content: {
+            msgtype: "m.text",
+            body: eventId,
+            "m.relates_to": { rel_type: "m.thread", event_id: rootId },
+          },
+          ts,
+        }),
+      );
+    const fetchesRoot = (eventId: string, ts: number) => {
+      (client as unknown as Record<string, unknown>).fetchRoomEvent = vi.fn().mockResolvedValue({
+        event_id: eventId,
+        room_id: roomId,
+        sender: "@a:h.example",
+        type: "m.room.message",
+        content: { msgtype: "m.text", body: eventId },
+        origin_server_ts: ts,
+      });
+    };
+    const gappySync = () => room.resetLiveTimeline("hole_tok", "old_sync_tok");
+    return { msg, reply, fetchesRoot, gappySync };
+  }
+
+  // Every test uses its own event ids: fetched roots are cached at module level.
+  it("marks a hole followed only by replies to a root fetched from inside it", async () => {
+    const { msg, reply, fetchesRoot, gappySync } = setup();
+    fetchesRoot("$g1-new", 2000);
+    msg("$g1-old", 1000);
+    reply("$g1-old-r1", "$g1-old", 1100);
+    gappySync();
+    reply("$g1-new-r1", "$g1-new", 3000);
+    reply("$g1-new-r2", "$g1-new", 3100);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    await waitFor(() =>
+      expect(result.current.events.map((e) => e.getId())).toEqual(["$g1-old", "$g1-new"]),
+    );
+    expect(result.current.gapBeforeEventIds).toEqual(["$g1-new"]);
+  });
+
+  it("anchors a hole followed only by replies to the next rendered event", () => {
+    const { msg, reply, gappySync } = setup();
+    msg("$g2-old", 1000);
+    gappySync();
+    reply("$g2-old-r1", "$g2-old", 2000);
+    gappySync();
+    msg("$g2-new", 3000);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    // Both holes sit between "old" and "new"; one marker covers them.
+    expect(result.current.gapBeforeEventIds).toEqual(["$g2-new"]);
+  });
+
+  it("does not anchor to a fetched root older than the hole", async () => {
+    const { msg, reply, fetchesRoot, gappySync } = setup();
+    fetchesRoot("$g3-root", 500);
+    msg("$g3-old", 1000);
+    gappySync();
+    reply("$g3-root-r1", "$g3-root", 2000);
+
+    const { result } = renderHook(() => useTimeline(roomId));
+    await waitFor(() =>
+      expect(result.current.events.map((e) => e.getId())).toEqual(["$g3-root", "$g3-old"]),
+    );
+    // Nothing rendered sits below the hole, so there is nothing to hang it on.
+    expect(result.current.gapBeforeEventIds).toEqual([]);
+  });
 });
 
 describe("useThreadPreview", () => {

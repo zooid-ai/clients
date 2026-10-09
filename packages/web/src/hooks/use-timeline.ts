@@ -218,6 +218,42 @@ function threadGapBeforeEventIds(
     .filter((id): id is string => !!id && anchors.has(id));
 }
 
+/**
+ * Where the room's gap markers go: before the first rendered event below the
+ * hole. Requiring the anchor to sit *in* the timeline after the hole drops the
+ * marker in agent rooms, where that stretch is often all thread replies
+ * (filtered out of the room view) and the roots that do render were fetched on
+ * their own and sit in no timeline. So an event in a timeline counts if that
+ * timeline is the gap's or a later one, and a fetched root counts if it is
+ * newer than everything loaded above the hole. Holes that resolve to the same
+ * event show as one marker; a hole with nothing rendered below it has nothing
+ * to anchor to.
+ */
+function roomGapBeforeEventIds(room: Room, events: MatrixEvent[]): string[] {
+  const gaps = gapStartTimelines(room);
+  if (gaps.size === 0) return [];
+  const order = timelinesOldestFirst(room);
+  const timelineSet = room.getUnfilteredTimelineSet();
+  const anchors = new Set<string>();
+  for (const gap of gaps) {
+    const gapRank = order.indexOf(gap);
+    // gapStartTimelines never returns the oldest timeline, so this is non-empty.
+    const holeStart = Math.max(
+      ...order.slice(0, gapRank).map((tl) => tl.getEvents().at(-1)!.getTs()),
+    );
+    const below = (ev: MatrixEvent) => {
+      const id = ev.getId();
+      const tl = id ? timelineSet.getTimelineForEvent(id) : null;
+      return tl ? order.indexOf(tl) >= gapRank : ev.getTs() > holeStart;
+    };
+    const id = events.find(below)?.getId();
+    if (id) anchors.add(id);
+  }
+  return events
+    .map((ev) => ev.getId())
+    .filter((id): id is string => !!id && anchors.has(id));
+}
+
 function snapshot(roomId: string): TimelineState {
   const client = MatrixClientPeg.safeGet();
   const room = client?.getRoom(roomId);
@@ -266,24 +302,7 @@ function snapshot(roomId: string): TimelineState {
 
   events.sort((a, b) => a.getTs() - b.getTs());
 
-  // Anchor each gap to the first *rendered* event of the timeline that follows
-  // it. The timeline's own first event may have been filtered out above (a
-  // thread reply or an edit), and anchoring to an event that never reaches the
-  // DOM would silently drop the marker.
-  const gapTimelines = gapStartTimelines(room);
-  const gapBeforeEventIds: string[] = [];
-  if (gapTimelines.size > 0) {
-    const timelineSet = room.getUnfilteredTimelineSet();
-    for (const ev of events) {
-      const id = ev.getId();
-      if (!id) continue;
-      const tl = timelineSet.getTimelineForEvent(id);
-      if (!tl || !gapTimelines.has(tl)) continue;
-      gapBeforeEventIds.push(id);
-      gapTimelines.delete(tl);
-      if (gapTimelines.size === 0) break;
-    }
-  }
+  const gapBeforeEventIds = roomGapBeforeEventIds(room, events);
 
   const echoKey = events
     .filter((ev) => ev.status)
